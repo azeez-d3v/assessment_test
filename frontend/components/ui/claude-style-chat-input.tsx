@@ -4,6 +4,7 @@ import type React from "react"
 
 import { useState, useRef, useEffect, useCallback } from "react"
 import { Plus, ChevronDown, ArrowUp, X, FileText, Loader2, Check, Archive } from "lucide-react"
+import Image from "next/image"
 
 /* --- ICONS --- */
 export const Icons = {
@@ -64,7 +65,13 @@ function FilePreviewCard({ file, onRemove }: { file: AttachedFile; onRemove: (id
     <div className="relative group flex-shrink-0 w-24 h-24 rounded-xl overflow-hidden border border-bg-300 bg-bg-200 transition-all hover:border-text-400">
       {isImage ? (
         <div className="w-full h-full relative">
-          <img src={file.preview! || "/placeholder.svg"} alt={file.file.name} className="w-full h-full object-cover" />
+          <Image
+            src={file.preview! || "/placeholder.svg"}
+            alt={file.file.name}
+            fill
+            className="object-cover"
+            unoptimized
+          />
           <div className="absolute inset-0 bg-black/20 group-hover:bg-black/0 transition-colors" />
         </div>
       ) : (

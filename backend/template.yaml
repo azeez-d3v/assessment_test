@@ -1,0 +1,239 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Doc Q&A Portal - RAG Backend with Pinecone and OpenRouter
+
+# Parameters for API keys (passed at deploy time)
+Parameters:
+  OpenRouterApiKey:
+    Type: String
+    Description: OpenRouter API Key (for LLM and embeddings)
+    NoEcho: true
+  PineconeApiKey:
+    Type: String
+    Description: Pinecone API Key
+    NoEcho: true
+  PineconeIndex:
+    Type: String
+    Description: Pinecone Index Name
+    Default: doc-qa-index
+
+Globals:
+  Function:
+    Timeout: 60
+    MemorySize: 512
+    Runtime: nodejs20.x
+    Architectures:
+      - x86_64
+    Environment:
+      Variables:
+        OPENROUTER_API_KEY: !Ref OpenRouterApiKey
+        PINECONE_API_KEY: !Ref PineconeApiKey
+        PINECONE_INDEX: !Ref PineconeIndex
+
+Resources:
+  # API Gateway
+  DocQaApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: prod
+      Cors:
+        AllowMethods: "'GET, POST, DELETE, OPTIONS'"
+        AllowHeaders: "'Content-Type'"
+        AllowOrigin: "'*'"
+
+  # Ping Lambda Function (health check)
+  PingFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: doc-qa-ping
+      CodeUri: ./
+      Handler: dist/handlers/ping.handler
+      Description: Health check endpoint
+      Events:
+        PingApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref DocQaApi
+            Path: /ping
+            Method: GET
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Minify: true
+        Target: es2020
+        EntryPoints:
+          - src/handlers/ping.ts
+
+  # Ingest Lambda Function (async - writes to S3, queues to SQS)
+  IngestFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: doc-qa-ingest
+      CodeUri: ./
+      Handler: dist/handlers/ingest.handler
+      Description: Accepts documents, writes to S3, queues to SQS for async processing
+      Environment:
+        Variables:
+          DOC_BUCKET: !Ref DocQaBucket
+          INGEST_QUEUE_URL: !Ref IngestQueue
+      Policies:
+        - S3CrudPolicy:
+            BucketName: !Ref DocQaBucket
+        - SQSSendMessagePolicy:
+            QueueName: !GetAtt IngestQueue.QueueName
+      Events:
+        IngestApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref DocQaApi
+            Path: /ingest
+            Method: POST
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Minify: true
+        Target: es2020
+        EntryPoints:
+          - src/handlers/ingest.ts
+
+  # Ask Lambda Function
+  AskFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: doc-qa-ask
+      CodeUri: ./
+      Handler: dist/handlers/ask.handler
+      Description: Answers questions using RAG with Pinecone and OpenRouter
+      Events:
+        AskApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref DocQaApi
+            Path: /ask
+            Method: POST
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Minify: true
+        Target: es2020
+        EntryPoints:
+          - src/handlers/ask.ts
+
+  # Documents Lambda Function (list, get content, delete)
+  DocumentsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: doc-qa-documents
+      CodeUri: ./
+      Handler: dist/handlers/documents.handler
+      Description: Lists, gets content, and deletes documents from Pinecone
+      Events:
+        ListDocuments:
+          Type: Api
+          Properties:
+            RestApiId: !Ref DocQaApi
+            Path: /documents
+            Method: GET
+        GetDocumentContent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref DocQaApi
+            Path: /documents/{docId}/content
+            Method: GET
+        DeleteDocument:
+          Type: Api
+          Properties:
+            RestApiId: !Ref DocQaApi
+            Path: /documents/{docId}
+            Method: DELETE
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Minify: true
+        Target: es2020
+        EntryPoints:
+          - src/handlers/documents.ts
+
+  # ============================================
+  # ASYNC INGEST RESOURCES (S3 + SQS + Worker)
+  # ============================================
+
+  # S3 Bucket for storing documents before processing
+  DocQaBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "doc-qa-ingest-${AWS::AccountId}"
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteAfter7Days
+            Status: Enabled
+            ExpirationInDays: 7
+
+  # Dead Letter Queue for failed messages
+  IngestDeadLetterQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: doc-qa-ingest-dlq
+      MessageRetentionPeriod: 1209600  # 14 days
+
+  # SQS Queue for ingest jobs
+  IngestQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: doc-qa-ingest-queue
+      VisibilityTimeout: 300  # 5 minutes (> Lambda timeout)
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt IngestDeadLetterQueue.Arn
+        maxReceiveCount: 3  # Retry 3 times before DLQ
+
+  # Ingest Worker Lambda (processes SQS messages)
+  IngestWorkerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: doc-qa-ingest-worker
+      CodeUri: ./
+      Handler: dist/handlers/ingest-worker.handler
+      Timeout: 120  # 2 minutes for processing
+      MemorySize: 1024
+      Description: Processes async ingest jobs from SQS
+      Environment:
+        Variables:
+          DOC_BUCKET: !Ref DocQaBucket
+      Policies:
+        - S3ReadPolicy:
+            BucketName: !Ref DocQaBucket
+        - S3CrudPolicy:
+            BucketName: !Ref DocQaBucket
+      Events:
+        SQSEvent:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt IngestQueue.Arn
+            BatchSize: 1  # Process one at a time
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Minify: true
+        Target: es2020
+        EntryPoints:
+          - src/handlers/ingest-worker.ts
+
+Outputs:
+  ApiEndpoint:
+    Description: API Gateway endpoint URL
+    Value: !Sub "https://${DocQaApi}.execute-api.${AWS::Region}.amazonaws.com/prod"
+  IngestEndpoint:
+    Description: Ingest endpoint URL
+    Value: !Sub "https://${DocQaApi}.execute-api.${AWS::Region}.amazonaws.com/prod/ingest"
+  AskEndpoint:
+    Description: Ask endpoint URL
+    Value: !Sub "https://${DocQaApi}.execute-api.${AWS::Region}.amazonaws.com/prod/ask"
+  DocumentsEndpoint:
+    Description: Documents endpoint URL
+    Value: !Sub "https://${DocQaApi}.execute-api.${AWS::Region}.amazonaws.com/prod/documents"
+  IngestBucket:
+    Description: S3 bucket for async ingest
+    Value: !Ref DocQaBucket
+  IngestQueueUrl:
+    Description: SQS queue URL for ingest jobs
+    Value: !Ref IngestQueue

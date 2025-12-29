@@ -1,0 +1,8 @@
+{
+    "body": "{\"question\":\"Can I get a refund on a digital product?\",\"topK\":3}",
+    "httpMethod": "POST",
+    "path": "/ask",
+    "headers": {
+        "Content-Type": "application/json"
+    }
+}

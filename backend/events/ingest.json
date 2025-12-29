@@ -1,0 +1,8 @@
+{
+    "body": "{\"documents\":[{\"id\":\"refund-policy\",\"title\":\"Refund Policy\",\"content\":\"Full refund within 30 days with receipt. No refunds on digital goods.\"}]}",
+    "httpMethod": "POST",
+    "path": "/ingest",
+    "headers": {
+        "Content-Type": "application/json"
+    }
+}

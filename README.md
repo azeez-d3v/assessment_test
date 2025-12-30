@@ -7,7 +7,7 @@ A document Q&A application that enables semantic search and question answering o
 - **Frontend**: Next.js 16 + TypeScript + Tailwind CSS
 - **Backend**: Node.js + TypeScript on AWS Lambda
 - **Vector Store**: Pinecone
-- **LLM & Embeddings**: OpenRouter SDK (`@openrouter/sdk`)
+- **LLM & Embeddings**: OpenAI SDK (compatible with OpenRouter)
 - **Infrastructure**: AWS SAM (API Gateway + Lambda)
 
 ## Project Structure

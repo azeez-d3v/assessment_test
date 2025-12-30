@@ -24,6 +24,9 @@ export default function HomePage() {
   const [hasStarted, setHasStarted] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
+  // Derive loading state from messages (if any message is loading)
+  const isLoading = messages.some((m) => m.isLoading)
+
   // Fetch document count on mount
   useEffect(() => {
     listDocuments()
@@ -129,6 +132,7 @@ export default function HomePage() {
                 placeholder="Ask anything..."
                 onSendMessage={handleSendMessage}
                 documentCount={documentCount}
+                isLoading={isLoading}
               />
             </div>
           </div>
@@ -228,6 +232,7 @@ export default function HomePage() {
                   placeholder="Reply..."
                   onSendMessage={handleSendMessage}
                   documentCount={documentCount}
+                  isLoading={isLoading}
                 />
               </div>
             </div>

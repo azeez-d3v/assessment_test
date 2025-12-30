@@ -198,9 +198,10 @@ interface ClaudeChatInputProps {
   placeholder?: string
   onSendMessage: (data: { message: string; model: string }) => void
   documentCount?: number | null
+  isLoading?: boolean
 }
 
-export function ClaudeChatInput({ placeholder = "How can I help you today?", onSendMessage, documentCount = 0 }: ClaudeChatInputProps) {
+export function ClaudeChatInput({ placeholder = "How can I help you today?", onSendMessage, documentCount = 0, isLoading = false }: ClaudeChatInputProps) {
   const [message, setMessage] = useState("")
   const [files, setFiles] = useState<AttachedFile[]>([])
   const [pastedContent, setPastedContent] = useState<PastedContent[]>([])
@@ -307,6 +308,7 @@ export function ClaudeChatInput({ placeholder = "How can I help you today?", onS
   }
 
   const handleSend = () => {
+    if (isLoading) return // Block sending while loading
     if (!message.trim() && files.length === 0 && pastedContent.length === 0) return
     onSendMessage({ message, model: selectedModel })
     setMessage("")
@@ -429,12 +431,16 @@ export function ClaudeChatInput({ placeholder = "How can I help you today?", onS
               )}
               <button
                 onClick={handleSend}
-                disabled={!hasContent}
-                className={`inline-flex items-center justify-center relative shrink-0 transition-colors h-8 w-8 rounded-xl active:scale-95 ${hasContent ? "bg-accent text-white hover:bg-accent-hover shadow-md" : "bg-accent/30 text-white/60 cursor-default"}`}
+                disabled={!hasContent || isLoading}
+                className={`inline-flex items-center justify-center relative shrink-0 transition-colors h-8 w-8 rounded-xl active:scale-95 ${hasContent && !isLoading ? "bg-accent text-white hover:bg-accent-hover shadow-md" : "bg-accent/30 text-white/60 cursor-default"}`}
                 type="button"
                 aria-label="Send message"
               >
-                <Icons.ArrowUp className="w-4 h-4" />
+                {isLoading ? (
+                  <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                ) : (
+                  <Icons.ArrowUp className="w-4 h-4" />
+                )}
               </button>
             </div>
           </div>

@@ -306,12 +306,12 @@ PUT file to S3 → S3 Event → SQS → IngestWorkerFunction
 
 ### UI & UX Enhancements (Bonus Feature)
 
-The frontend includes several polish items:
+The frontend includes several polish items with a **Claude-inspired aesthetic**:
 - **Rich Text Chat**: The chat interface supports **Markdown rendering**, allowing for bold text, italics, lists, and headers in responses.
-- **Improved Typography**: Custom styling for chat messages with better line spacing and list formatting.
+- **Improved Typography**: Custom styling and color palettes (warm beige backgrounds, terra-cotta accents) matching high-end AI assistants.
 - **Global Scrollbar Hiding**: A cleaner, modern look with hidden scrollbars (while maintaining functionality) across the application.
 - **Smart File Input**: The file upload area handles `.md` and `.txt` files with auto-populating fields and scrollable content preview.
-- **Empty State Handling**: Intelligent UI that detects when no documents are indexed, disabling specific retrieval modes and showing a clear "No documents" warning banner.
+- **Empty State Handling**: Intelligent UI that detects when no documents are indexed, showing a warning banner identical to industry-standard interfaces.
 - **Smooth Animations**: Transitions for UI elements to prevent jarring layout shifts.
 
 ### Future Enhancements

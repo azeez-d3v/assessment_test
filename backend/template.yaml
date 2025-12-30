@@ -155,14 +155,66 @@ Resources:
           - src/handlers/documents.ts
 
   # ============================================
+  # UPLOAD URL FUNCTION (Presigned S3 URLs)
+  # ============================================
+
+  UploadUrlFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: doc-qa-upload-url
+      CodeUri: ./
+      Handler: dist/handlers/upload-url.handler
+      Description: Generates presigned S3 URLs for direct file uploads
+      Environment:
+        Variables:
+          DOC_BUCKET: !Ref DocQaBucket
+      Policies:
+        - S3CrudPolicy:
+            BucketName: !Ref DocQaBucket
+      Events:
+        UploadUrlApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref DocQaApi
+            Path: /upload-url
+            Method: GET
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Minify: true
+        Target: es2020
+        EntryPoints:
+          - src/handlers/upload-url.ts
+
+  # ============================================
   # ASYNC INGEST RESOURCES (S3 + SQS + Worker)
   # ============================================
 
   # S3 Bucket for storing documents before processing
   DocQaBucket:
     Type: AWS::S3::Bucket
+    DependsOn: IngestQueue
     Properties:
       BucketName: !Sub "doc-qa-ingest-${AWS::AccountId}"
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders:
+              - "*"
+            AllowedMethods:
+              - PUT
+              - GET
+            AllowedOrigins:
+              - "*"
+            MaxAge: 3000
+      NotificationConfiguration:
+        QueueConfigurations:
+          - Event: s3:ObjectCreated:*
+            Queue: !GetAtt IngestQueue.Arn
+            Filter:
+              S3Key:
+                Rules:
+                  - Name: prefix
+                    Value: uploads/
       LifecycleConfiguration:
         Rules:
           - Id: DeleteAfter7Days
@@ -186,6 +238,24 @@ Resources:
         deadLetterTargetArn: !GetAtt IngestDeadLetterQueue.Arn
         maxReceiveCount: 3  # Retry 3 times before DLQ
 
+  # SQS Queue Policy - Allow S3 to send messages
+  IngestQueuePolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      Queues:
+        - !Ref IngestQueue
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: s3.amazonaws.com
+            Action: sqs:SendMessage
+            Resource: !GetAtt IngestQueue.Arn
+            Condition:
+              ArnLike:
+                aws:SourceArn: !Sub "arn:aws:s3:::doc-qa-ingest-${AWS::AccountId}"
+
   # Ingest Worker Lambda (processes SQS messages)
   IngestWorkerFunction:
     Type: AWS::Serverless::Function
@@ -204,6 +274,13 @@ Resources:
             BucketName: !Ref DocQaBucket
         - S3CrudPolicy:
             BucketName: !Ref DocQaBucket
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - textract:DetectDocumentText
+                - textract:AnalyzeDocument
+              Resource: '*'
       Events:
         SQSEvent:
           Type: SQS
@@ -234,6 +311,9 @@ Outputs:
   IngestBucket:
     Description: S3 bucket for async ingest
     Value: !Ref DocQaBucket
+  UploadUrlEndpoint:
+    Description: Upload URL endpoint for presigned S3 URLs
+    Value: !Sub "https://${DocQaApi}.execute-api.${AWS::Region}.amazonaws.com/prod/upload-url"
   IngestQueueUrl:
     Description: SQS queue URL for ingest jobs
     Value: !Ref IngestQueue

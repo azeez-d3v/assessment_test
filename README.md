@@ -152,6 +152,31 @@ Lists all ingested documents.
 
 Deletes a document and its chunks.
 
+### GET /upload-url
+
+Generates a presigned S3 URL for direct file upload.
+
+**Request:**
+```
+GET /upload-url?filename=my-document.md
+```
+
+**Response:**
+```json
+{
+  "uploadUrl": "https://s3.amazonaws.com/...",
+  "s3Key": "uploads/uuid/my-document.md",
+  "docId": "my-document",
+  "title": "my-document",
+  "expiresIn": 300
+}
+```
+
+**Usage:**
+1. Call `GET /upload-url` with your filename
+2. `PUT` the file contents to the returned `uploadUrl`
+3. S3 event triggers background processing automatically
+
 ## Deployment
 
 ### AWS SAM Deployment
@@ -190,9 +215,14 @@ Update `NEXT_PUBLIC_API_URL` to your API Gateway endpoint.
 - Simple but effective for most documents
 
 ### Embedding & LLM
-- Both powered by **OpenRouter SDK** (single API key)
+- Powered by **OpenAI SDK** (configured for OpenRouter)
 - Embeddings: `openai/text-embedding-3-small` (1536 dimensions)
-- LLM: `google/gemini-2.0-flash-lite` (configurable via `LLM_MODEL` env var)
+- LLM: `openai/gpt-4o-mini` (configurable via `LLM_MODEL` env var)
+
+### Chat History (Memory)
+- **Full Conversation Context**: The bot remembers previous questions and context within a session.
+- **Frontend**: Stateless UI sends full conversation history with each request.
+- **Backend**: Appends previous 10 messages to the system prompt for context continuity.
 
 ### Source Filtering
 - Similarity threshold of 0.5 filters irrelevant sources
@@ -228,6 +258,39 @@ POST /ingest → IngestFunction → S3 (store doc) → SQS (queue job) → 202 A
 **File Upload Support:**
 The frontend supports uploading `.md` and `.txt` files, which are read as plain text and ingested like manually-entered documents.
 
+### Hybrid S3 Upload Architecture (Scalable File Ingestion)
+
+The app supports two ingestion paths:
+
+**Path 1: API Ingestion (Plain Text)**
+```
+POST /ingest → IngestFunction → S3 + SQS → 202 Accepted
+                                     ↓
+                          IngestWorkerFunction (SQS trigger)
+                                     ↓
+                      Read S3 → Chunk → Embed → Pinecone
+```
+
+**Path 2: Direct S3 Upload (Scalable)**
+```
+GET /upload-url → Presigned S3 URL
+        ↓
+PUT file to S3 → S3 Event → SQS → IngestWorkerFunction
+                                        ↓
+               Detect file type → Extract text → Chunk → Embed → Pinecone
+```
+
+**Text Extraction by File Type:**
+| Extension | Method |
+|-----------|--------|
+| `.txt`, `.md` | Plain text read |
+| `.pdf` | AWS Textract (with `pdf-parse-new` fallback) |
+| `.docx` | Mammoth library |
+
+**Why Hybrid?**
+- **API path**: Best for programmatic ingestion, user controls metadata
+- **S3 path**: Best for large files, bypasses API Gateway 10MB limit, supports binary files
+
 ### UI & UX Enhancements (Bonus Feature)
 
 The frontend includes several polish items:
@@ -236,11 +299,11 @@ The frontend includes several polish items:
 - **Global Scrollbar Hiding**: A cleaner, modern look with hidden scrollbars (while maintaining functionality) across the application.
 - **Smart File Input**: The file upload area handles `.md` and `.txt` files with auto-populating fields and scrollable content preview.
 
-### If I Had More Time...
-- Add PDF/DOCX text extraction with AWS Textract
-- Add conversation history/context
+### Future Enhancements
+
+While this assessment focused on delivering a robust, core RAG architecture and scalable ingestion pipeline, the following features would be prioritized for a production deployment:
 - Implement streaming responses
 - Add rate limiting and caching
-- Better error handling UI
-- Document versioning
-- Job status polling endpoint
+- Document versioning (implemented?)
+- Improve mobile responsiveness
+

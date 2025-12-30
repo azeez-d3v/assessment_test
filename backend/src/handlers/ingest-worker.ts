@@ -1,19 +1,32 @@
 /**
  * Lambda handler for SQS-triggered async document processing
- * Reads document from S3, chunks, embeds, and upserts to Pinecone
+ * Handles both API-queued jobs and S3-event triggered jobs
+ * Supports: .txt, .md (plain text), .pdf (Textract), .docx (Mammoth)
  */
 
-import { SQSEvent, SQSRecord, Context } from 'aws-lambda';
-import { S3Client, GetObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
+import { SQSEvent, SQSRecord, Context, S3Event } from 'aws-lambda';
+import { S3Client, GetObjectCommand, DeleteObjectCommand, HeadObjectCommand } from '@aws-sdk/client-s3';
+import { TextractClient, DetectDocumentTextCommand } from '@aws-sdk/client-textract';
+import mammoth from 'mammoth';
 import { chunkDocument } from '../services/chunking';
 import { embedTexts } from '../services/embeddings';
 import { upsertChunks } from '../services/pinecone';
 import { Document } from '../types';
 
 const s3Client = new S3Client({});
+const textractClient = new TextractClient({});
 const BUCKET = process.env.DOC_BUCKET || '';
 
-interface IngestJob {
+// Supported file extensions
+const TEXT_EXTENSIONS = ['.txt', '.md'];
+const PDF_EXTENSIONS = ['.pdf'];
+const DOCX_EXTENSIONS = ['.docx'];
+const ALL_SUPPORTED = [...TEXT_EXTENSIONS, ...PDF_EXTENSIONS, ...DOCX_EXTENSIONS];
+
+/**
+ * Job format from POST /ingest API
+ */
+interface ApiIngestJob {
     jobId: string;
     s3Key: string;
     document: {
@@ -23,25 +36,221 @@ interface IngestJob {
 }
 
 /**
- * Process a single SQS record
+ * Get file extension from key
  */
-async function processRecord(record: SQSRecord): Promise<void> {
-    const job: IngestJob = JSON.parse(record.body);
-    console.log(`Processing job ${job.jobId} for document ${job.document.id}`);
+function getFileExtension(key: string): string {
+    const lastDot = key.lastIndexOf('.');
+    return lastDot >= 0 ? key.substring(lastDot).toLowerCase() : '';
+}
 
-    // Read document content from S3
+/**
+ * Detect if SQS message is from S3 event notification
+ */
+function isS3EventRecord(body: unknown): body is S3Event {
+    return (
+        typeof body === 'object' &&
+        body !== null &&
+        'Records' in body &&
+        Array.isArray((body as S3Event).Records) &&
+        (body as S3Event).Records.length > 0 &&
+        'eventSource' in (body as S3Event).Records[0] &&
+        (body as S3Event).Records[0].eventSource === 'aws:s3'
+    );
+}
+
+/**
+ * Extract document metadata from S3 object
+ */
+async function getDocumentMetadata(bucket: string, key: string): Promise<{ docId: string; title: string }> {
+    try {
+        const headResult = await s3Client.send(new HeadObjectCommand({
+            Bucket: bucket,
+            Key: key,
+        }));
+
+        // Try to get metadata from S3 object
+        const metadata = headResult.Metadata || {};
+        if (metadata['doc-id'] && metadata['doc-title']) {
+            return {
+                docId: metadata['doc-id'],
+                title: metadata['doc-title'],
+            };
+        }
+    } catch (err) {
+        console.log('Could not retrieve S3 metadata, deriving from key');
+    }
+
+    // Derive from S3 key: uploads/{uuid}/{filename}.ext
+    const filename = key.split('/').pop() || 'document';
+    const baseName = filename.replace(/\.(txt|md|pdf|docx)$/i, '');
+    const docId = baseName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'document';
+
+    return {
+        docId,
+        title: baseName || 'Untitled',
+    };
+}
+
+/**
+ * Extract text from PDF using pdf-parse-new (fallback method)
+ */
+async function extractTextWithPdfParse(bucket: string, key: string): Promise<string> {
+    console.log(`Extracting text from PDF using pdf-parse-new (fallback): ${key}`);
+
+    // Get the PDF file from S3
     const getResult = await s3Client.send(new GetObjectCommand({
-        Bucket: BUCKET,
-        Key: job.s3Key,
+        Bucket: bucket,
+        Key: key,
+    }));
+
+    // Convert stream to buffer
+    const chunks: Uint8Array[] = [];
+    if (getResult.Body) {
+        const reader = getResult.Body as AsyncIterable<Uint8Array>;
+        for await (const chunk of reader) {
+            chunks.push(chunk);
+        }
+    }
+    const buffer = Buffer.concat(chunks);
+
+    // Extract text using pdf-parse-new (simple API, Lambda compatible)
+    const pdfParse = (await import('pdf-parse-new')).default;
+    const result = await pdfParse(buffer);
+    console.log(`Extracted ${result.text.length} chars from PDF using pdf-parse-new`);
+    return result.text;
+}
+
+/**
+ * Extract text from PDF using AWS Textract with pdf-parse fallback
+ */
+async function extractTextFromPDF(bucket: string, key: string): Promise<string> {
+    // Try Textract first
+    try {
+        console.log(`Extracting text from PDF using Textract: ${key}`);
+
+        const response = await textractClient.send(new DetectDocumentTextCommand({
+            Document: {
+                S3Object: {
+                    Bucket: bucket,
+                    Name: key,
+                },
+            },
+        }));
+
+        // Extract all LINE blocks and join them
+        const lines: string[] = [];
+        for (const block of response.Blocks || []) {
+            if (block.BlockType === 'LINE' && block.Text) {
+                lines.push(block.Text);
+            }
+        }
+
+        const text = lines.join('\n');
+        console.log(`Extracted ${text.length} chars from PDF using Textract`);
+        return text;
+    } catch (error: unknown) {
+        // Fall back to pdf-parse for certain errors
+        const errorName = (error as { name?: string })?.name || '';
+        const errorMessage = (error as { message?: string })?.message || '';
+
+        if (errorName === 'SubscriptionRequiredException' ||
+            errorMessage.includes('subscription') ||
+            errorName === 'AccessDeniedException') {
+            console.log(`Textract unavailable (${errorName}), falling back to pdf-parse`);
+            return extractTextWithPdfParse(bucket, key);
+        }
+
+        // For other errors, still try fallback
+        console.log(`Textract error (${errorName}), attempting pdf-parse fallback`);
+        try {
+            return await extractTextWithPdfParse(bucket, key);
+        } catch (fallbackError) {
+            console.error('pdf-parse fallback also failed:', fallbackError);
+            throw error; // Re-throw original error
+        }
+    }
+}
+
+/**
+ * Extract text from DOCX using Mammoth
+ */
+async function extractTextFromDOCX(bucket: string, key: string): Promise<string> {
+    console.log(`Extracting text from DOCX using Mammoth: ${key}`);
+
+    // Get the DOCX file from S3
+    const getResult = await s3Client.send(new GetObjectCommand({
+        Bucket: bucket,
+        Key: key,
+    }));
+
+    // Convert stream to buffer
+    const chunks: Uint8Array[] = [];
+    if (getResult.Body) {
+        const reader = getResult.Body as AsyncIterable<Uint8Array>;
+        for await (const chunk of reader) {
+            chunks.push(chunk);
+        }
+    }
+    const buffer = Buffer.concat(chunks);
+
+    // Extract text using Mammoth
+    const result = await mammoth.extractRawText({ buffer });
+    console.log(`Extracted ${result.value.length} chars from DOCX`);
+    return result.value;
+}
+
+/**
+ * Extract text from plain text files (.txt, .md)
+ */
+async function extractTextFromPlainText(bucket: string, key: string): Promise<string> {
+    console.log(`Reading plain text file: ${key}`);
+
+    const getResult = await s3Client.send(new GetObjectCommand({
+        Bucket: bucket,
+        Key: key,
     }));
 
     const content = await getResult.Body?.transformToString() || '';
-    console.log(`Read ${content.length} chars from S3`);
+    console.log(`Read ${content.length} chars from plain text`);
+    return content;
+}
+
+/**
+ * Extract text from document based on file type
+ */
+async function extractText(bucket: string, key: string): Promise<string> {
+    const ext = getFileExtension(key);
+
+    if (PDF_EXTENSIONS.includes(ext)) {
+        return extractTextFromPDF(bucket, key);
+    } else if (DOCX_EXTENSIONS.includes(ext)) {
+        return extractTextFromDOCX(bucket, key);
+    } else if (TEXT_EXTENSIONS.includes(ext)) {
+        return extractTextFromPlainText(bucket, key);
+    } else {
+        console.log(`Unsupported file type: ${ext}, attempting plain text read`);
+        return extractTextFromPlainText(bucket, key);
+    }
+}
+
+/**
+ * Process a document from S3
+ */
+async function processDocument(bucket: string, s3Key: string, docId: string, title: string): Promise<void> {
+    console.log(`Processing document ${docId} from ${s3Key}`);
+
+    // Extract text content based on file type
+    const content = await extractText(bucket, s3Key);
+
+    if (!content.trim()) {
+        console.log('Empty document content, skipping');
+        return;
+    }
 
     // Create full document object
     const document: Document = {
-        id: job.document.id,
-        title: job.document.title,
+        id: docId,
+        title,
         content,
     };
 
@@ -65,10 +274,56 @@ async function processRecord(record: SQSRecord): Promise<void> {
 
     // Delete the S3 object (cleanup)
     await s3Client.send(new DeleteObjectCommand({
-        Bucket: BUCKET,
-        Key: job.s3Key,
+        Bucket: bucket,
+        Key: s3Key,
     }));
-    console.log(`Deleted S3 object ${job.s3Key}`);
+    console.log(`Deleted S3 object ${s3Key}`);
+}
+
+/**
+ * Process a record from API-queued job
+ */
+async function processApiJob(job: ApiIngestJob): Promise<void> {
+    console.log(`Processing API job ${job.jobId} for document ${job.document.id}`);
+    await processDocument(BUCKET, job.s3Key, job.document.id, job.document.title);
+}
+
+/**
+ * Process a record from S3 event
+ */
+async function processS3Event(s3Event: S3Event): Promise<void> {
+    for (const record of s3Event.Records) {
+        const bucket = record.s3.bucket.name;
+        const key = decodeURIComponent(record.s3.object.key.replace(/\+/g, ' '));
+
+        console.log(`Processing S3 event for ${bucket}/${key}`);
+
+        // Check if file type is supported
+        const ext = getFileExtension(key);
+        if (!ALL_SUPPORTED.includes(ext)) {
+            console.log(`Skipping unsupported file type: ${key}`);
+            continue;
+        }
+
+        // Get document metadata
+        const { docId, title } = await getDocumentMetadata(bucket, key);
+        await processDocument(bucket, key, docId, title);
+    }
+}
+
+/**
+ * Process a single SQS record
+ */
+async function processRecord(record: SQSRecord): Promise<void> {
+    const body = JSON.parse(record.body);
+
+    if (isS3EventRecord(body)) {
+        // S3 event notification wrapped in SQS
+        await processS3Event(body);
+    } else {
+        // API-queued job
+        await processApiJob(body as ApiIngestJob);
+    }
 }
 
 /**

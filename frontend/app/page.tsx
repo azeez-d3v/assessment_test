@@ -75,7 +75,15 @@ export default function HomePage() {
     }
 
     try {
-      const result = await askQuestion(data.message, topK)
+      // Prepare history (previous messages only, stripping metadata)
+      const history = messages
+        .filter((m) => !m.isLoading && !m.error)
+        .map((m) => ({
+          role: m.role,
+          content: m.content,
+        }))
+
+      const result = await askQuestion(data.message, history, topK)
       setMessages((prev) =>
         prev.map((msg) =>
           msg.id === assistantMessageId

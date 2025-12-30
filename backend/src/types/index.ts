@@ -28,9 +28,16 @@ export interface IngestResponse {
     ingestedChunks: number;
 }
 
+
+export interface Message {
+    role: 'user' | 'assistant' | 'system';
+    content: string;
+}
+
 // Ask endpoint
 export interface AskRequest {
     question: string;
+    messages?: Message[]; // Chat history
     topK?: number;
 }
 

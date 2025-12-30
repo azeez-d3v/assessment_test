@@ -52,8 +52,8 @@ export async function handler(
         // Query Pinecone for similar chunks
         const retrievedChunks = await queryByVector(questionEmbedding, request.topK);
 
-        // Generate answer using LLM with retrieved context
-        const answer = await answerWithContext(request.question, retrievedChunks);
+        // Generate answer using LLM with retrieved context and chat history
+        const answer = await answerWithContext(request.question, retrievedChunks, request.messages);
 
         // Filter chunks by relevance score - don't show sources for generic questions
         const RELEVANCE_THRESHOLD = 0.5;

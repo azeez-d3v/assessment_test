@@ -10,8 +10,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { EditDocumentDialog } from "@/components/edit-document-dialog"
 import { useToast } from "@/hooks/use-toast"
 import { Toaster } from "@/components/ui/toaster"
-import { ingestDocuments, listDocuments, deleteDocument, getDocumentContent, DocumentInfo } from "@/lib/api"
-import { X, Loader2, Trash2, RefreshCw, Pencil, Upload } from "lucide-react"
+import { ingestDocuments, listDocuments, deleteDocument, getDocumentContent, getUploadUrl, uploadFileToS3, DocumentInfo } from "@/lib/api"
+import { X, Loader2, Trash2, RefreshCw, Pencil, Upload, CloudUpload, Maximize } from "lucide-react"
 import { Icons } from "@/components/ui/claude-style-chat-input"
 
 interface PendingDocument {
@@ -33,6 +33,9 @@ export default function DocsPage() {
   const [editDoc, setEditDoc] = useState<{ docId: string; title: string; content: string } | null>(null)
   const [editLoading, setEditLoading] = useState(false)
   const [contentLoading, setContentLoading] = useState(false)
+  const [directUploadProgress, setDirectUploadProgress] = useState<number | null>(null)
+  const [directUploading, setDirectUploading] = useState(false)
+  const [isExpanded, setIsExpanded] = useState(false)
   const { toast } = useToast()
 
   const fetchDocuments = async () => {
@@ -94,6 +97,58 @@ export default function DocsPage() {
 
     // Reset input so same file can be selected again
     event.target.value = ''
+  }
+
+  // Handle direct S3 upload - uploads file directly to S3
+  const handleDirectUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    // Validate file type
+    const validTypes = ['.md', '.txt', '.pdf', '.docx']
+    const ext = file.name.substring(file.name.lastIndexOf('.')).toLowerCase()
+    if (!validTypes.includes(ext)) {
+      toast({
+        title: "Invalid File Type",
+        description: "Supported: .md, .txt, .pdf, .docx",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setDirectUploading(true)
+    setDirectUploadProgress(0)
+
+    try {
+      // Get presigned URL
+      const { uploadUrl, docId, title } = await getUploadUrl(file.name)
+
+      // Upload directly to S3
+      await uploadFileToS3(file, uploadUrl, (progress) => {
+        setDirectUploadProgress(progress)
+      })
+
+      toast({
+        title: "Upload Complete",
+        description: `"${title}" (${docId}) uploaded and queued for processing`,
+      })
+
+      // Refresh document list after a short delay to allow processing
+      setTimeout(() => {
+        fetchDocuments()
+      }, 2000)
+
+    } catch (err) {
+      toast({
+        title: "Upload Failed",
+        description: err instanceof Error ? err.message : "Failed to upload file",
+        variant: "destructive",
+      })
+    } finally {
+      setDirectUploading(false)
+      setDirectUploadProgress(null)
+      event.target.value = ''
+    }
   }
 
   const handleAddToPending = () => {
@@ -261,7 +316,55 @@ export default function DocsPage() {
               <CardDescription className="text-text-400">Enter document details to add to pending list</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              {/* File Upload */}
+              {/* Direct S3 Upload */}
+              <div className="p-4 rounded-lg border border-dashed border-accent/50 bg-accent/5">
+                <div className="flex items-center gap-2 mb-2">
+                  <CloudUpload className="w-5 h-5 text-accent" />
+                  <span className="text-sm font-medium text-text-100">Quick Upload</span>
+                  <span className="text-xs text-text-400">(Recommended)</span>
+                </div>
+                <p className="text-xs text-text-400 mb-3">Upload directly to S3 for instant processing</p>
+                <input
+                  type="file"
+                  id="direct-upload"
+                  accept=".md,.txt,.pdf,.docx"
+                  onChange={handleDirectUpload}
+                  className="hidden"
+                  disabled={directUploading}
+                />
+                <label
+                  htmlFor="direct-upload"
+                  className={`flex items-center justify-center gap-2 w-full px-4 py-3 cursor-pointer rounded-lg bg-accent hover:bg-accent-hover text-white text-sm font-medium transition-colors ${directUploading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                >
+                  {directUploading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Uploading... {directUploadProgress}%
+                    </>
+                  ) : (
+                    <>
+                      <CloudUpload className="w-4 h-4" />
+                      Upload file (.txt, .md, .pdf, .docx)
+                    </>
+                  )}
+                </label>
+                {directUploading && (
+                  <div className="mt-2 h-1.5 bg-bg-300 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-accent transition-all duration-300"
+                      style={{ width: `${directUploadProgress || 0}%` }}
+                    />
+                  </div>
+                )}
+              </div>
+
+              <div className="relative flex items-center">
+                <div className="flex-grow border-t border-bg-300" />
+                <span className="px-3 text-xs text-text-400">or add manually</span>
+                <div className="flex-grow border-t border-bg-300" />
+              </div>
+
+              {/* File Load (for manual editing) */}
               <div className="flex items-center gap-2">
                 <input
                   type="file"
@@ -272,17 +375,22 @@ export default function DocsPage() {
                 />
                 <label
                   htmlFor="file-upload"
-                  className="flex items-center gap-2 px-4 py-2 cursor-pointer rounded-lg border border-dashed border-bg-300 hover:border-accent hover:bg-bg-50 transition-colors text-sm text-text-300 hover:text-text-100"
+                  className="flex items-center justify-center gap-2 flex-1 px-4 py-2 cursor-pointer rounded-lg border border-bg-300 hover:bg-accent hover:border-accent hover:text-white transition-colors text-sm text-text-300"
                 >
                   <Upload className="w-4 h-4" />
-                  Upload .md or .txt file
+                  Load file into form
                 </label>
-              </div>
-
-              <div className="relative flex items-center">
-                <div className="flex-grow border-t border-bg-300" />
-                <span className="px-3 text-xs text-text-400">or enter manually</span>
-                <div className="flex-grow border-t border-bg-300" />
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDocId("")
+                    setDocTitle("")
+                    setDocContent("")
+                  }}
+                  className="px-4 py-2 rounded-lg border border-bg-300 hover:bg-accent hover:border-accent hover:text-white transition-colors text-sm text-text-300"
+                >
+                  Reset
+                </button>
               </div>
 
               <div className="space-y-2">
@@ -312,18 +420,67 @@ export default function DocsPage() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="doc-content" className="text-text-200">
-                  Content
-                </Label>
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="doc-content" className="text-text-200">
+                    Content
+                  </Label>
+                  <button
+                    type="button"
+                    onClick={() => setIsExpanded(true)}
+                    className="p-1 rounded hover:bg-bg-200 text-text-400 hover:text-text-100 transition-colors"
+                    title="Expand editor"
+                  >
+                    <Maximize className="w-4 h-4" />
+                  </button>
+                </div>
                 <Textarea
                   id="doc-content"
                   placeholder="Document content..."
                   value={docContent}
                   onChange={(e) => setDocContent(e.target.value)}
-                  rows={8}
-                  className="resize-none border-bg-300 bg-bg-0 text-text-100 placeholder:text-text-400 max-h-[300px] overflow-y-auto"
+                  rows={4}
+                  className="resize-none border-bg-300 bg-bg-0 text-text-100 placeholder:text-text-400 h-[100px] overflow-y-auto"
                 />
               </div>
+
+              {/* Expanded Content Modal */}
+              {isExpanded && (
+                <div
+                  className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm animate-in fade-in duration-200"
+                  onClick={(e) => e.target === e.currentTarget && setIsExpanded(false)}
+                >
+                  <div className="w-[90vw] h-[85vh] bg-bg-0 rounded-2xl shadow-2xl flex flex-col animate-in zoom-in-95 duration-200">
+                    <div className="flex items-center justify-between p-4 border-b border-bg-300">
+                      <Label className="text-text-200 text-lg font-medium">Content Editor</Label>
+                      <button
+                        type="button"
+                        onClick={() => setIsExpanded(false)}
+                        className="p-2 rounded-lg hover:bg-bg-200 text-text-400 hover:text-text-100 transition-colors"
+                        title="Close"
+                      >
+                        <X className="w-5 h-5" />
+                      </button>
+                    </div>
+                    <div className="flex-1 p-4">
+                      <Textarea
+                        autoFocus
+                        placeholder="Document content..."
+                        value={docContent}
+                        onChange={(e) => setDocContent(e.target.value)}
+                        className="resize-none border-bg-300 bg-bg-100 text-text-100 placeholder:text-text-400 h-full w-full text-base"
+                      />
+                    </div>
+                    <div className="p-4 border-t border-bg-300 flex justify-end">
+                      <Button
+                        onClick={() => setIsExpanded(false)}
+                        className="bg-accent hover:bg-accent-hover text-white"
+                      >
+                        Done
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               <Button
                 onClick={handleAddToPending}
@@ -343,7 +500,7 @@ export default function DocsPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               {pendingDocs.length === 0 ? (
-                <div className="flex h-64 items-center justify-center rounded-lg border border-dashed border-bg-300">
+                <div className="flex h-24 items-center justify-center rounded-lg border border-dashed border-bg-300">
                   <p className="text-sm text-text-400">No pending documents</p>
                 </div>
               ) : (
@@ -458,10 +615,10 @@ export default function DocsPage() {
             )}
           </CardContent>
         </Card>
-      </main>
+      </main >
 
       {/* Edit Document Dialog */}
-      <EditDocumentDialog
+      < EditDocumentDialog
         open={editDialogOpen}
         onOpenChange={setEditDialogOpen}
         editDoc={editDoc}
@@ -472,6 +629,6 @@ export default function DocsPage() {
       />
 
       <Toaster />
-    </div>
+    </div >
   )
 }

@@ -1,22 +1,31 @@
 /**
- * Embeddings service using OpenRouter SDK
+ * Embeddings service using OpenAI SDK with OpenRouter
  * Consolidated with LLM to use single API key
+ * 
+ * Using OpenAI SDK is cleaner and more standard - OpenRouter is fully compatible.
  */
 
-import { OpenRouter } from '@openrouter/sdk';
+import OpenAI from 'openai';
 
-// Lazy-loaded OpenRouter client (env vars not available at module load time)
-let openRouter: OpenRouter | null = null;
+// Lazy-loaded OpenAI client (env vars not available at module load time)
+let openai: OpenAI | null = null;
 
-function getOpenRouter(): OpenRouter {
-    if (!openRouter) {
+function getOpenAI(): OpenAI {
+    if (!openai) {
         const apiKey = process.env.OPENROUTER_API_KEY;
         if (!apiKey) {
             throw new Error('OPENROUTER_API_KEY environment variable is required');
         }
-        openRouter = new OpenRouter({ apiKey });
+        openai = new OpenAI({
+            baseURL: 'https://openrouter.ai/api/v1',
+            apiKey,
+            defaultHeaders: {
+                'HTTP-Referer': process.env.APP_URL || 'https://doc-qa-portal.example.com',
+                'X-Title': 'Doc Q&A Portal',
+            },
+        });
     }
-    return openRouter;
+    return openai;
 }
 
 // OpenRouter embedding model - text-embedding-3-small is a good balance of quality and cost
@@ -26,25 +35,15 @@ const EMBEDDING_MODEL = process.env.EMBEDDING_MODEL || 'openai/text-embedding-3-
  * Generate embedding for a single text
  */
 export async function embedText(text: string): Promise<number[]> {
-    const response = await getOpenRouter().embeddings.generate({
+    const response = await getOpenAI().embeddings.create({
         input: text,
         model: EMBEDDING_MODEL,
     });
 
-    // Response can be string or object with data array
-    if (typeof response === 'string') {
-        throw new Error('Unexpected string response from OpenRouter embeddings API');
-    }
-
     const embedding = response.data?.[0]?.embedding;
 
-    if (!embedding || (Array.isArray(embedding) && embedding.length === 0)) {
+    if (!embedding || embedding.length === 0) {
         throw new Error('No embedding returned from OpenRouter API');
-    }
-
-    // Embedding can be number[] or base64 string
-    if (typeof embedding === 'string') {
-        throw new Error('Base64 embedding format not supported');
     }
 
     return embedding;
@@ -56,27 +55,17 @@ export async function embedText(text: string): Promise<number[]> {
 export async function embedTexts(texts: string[]): Promise<number[][]> {
     if (texts.length === 0) return [];
 
-    // OpenRouter supports batch input
-    const response = await getOpenRouter().embeddings.generate({
+    // OpenAI SDK supports batch input
+    const response = await getOpenAI().embeddings.create({
         input: texts,
         model: EMBEDDING_MODEL,
     });
-
-    // Response can be string or object with data array
-    if (typeof response === 'string') {
-        throw new Error('Unexpected string response from OpenRouter embeddings API');
-    }
 
     if (!response.data || response.data.length === 0) {
         throw new Error('No embeddings returned from OpenRouter API');
     }
 
-    return response.data.map(item => {
-        if (typeof item.embedding === 'string') {
-            throw new Error('Base64 embedding format not supported');
-        }
-        return item.embedding;
-    });
+    return response.data.map(item => item.embedding);
 }
 
 /**

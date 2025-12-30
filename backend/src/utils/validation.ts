@@ -16,9 +16,16 @@ export const IngestRequestSchema = z.object({
     documents: z.array(DocumentSchema).min(1, 'At least one document is required'),
 });
 
+// Message schema
+export const MessageSchema = z.object({
+    role: z.enum(['user', 'assistant', 'system']),
+    content: z.string(),
+});
+
 // Ask request schema
 export const AskRequestSchema = z.object({
     question: z.string().min(1, 'Question is required'),
+    messages: z.array(MessageSchema).optional(),
     topK: z.number().int().positive().max(10).optional().default(3),
 });
 

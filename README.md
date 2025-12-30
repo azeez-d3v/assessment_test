@@ -20,7 +20,8 @@ assessment_test/
 │   └── lib/           # API utilities
 ├── backend/           # Lambda functions
 │   ├── src/
-│   │   ├── handlers/  # Lambda handlers (ingest, ask, documents)
+│   │   ├── __tests__/ # Manual test scripts (chat history, openai sdk, etc)
+│   │   ├── handlers/  # Lambda handlers (ingest, ask, upload-url)
 │   │   ├── services/  # Business logic (chunking, embeddings, llm, pinecone)
 │   │   └── utils/     # Validation schemas
 │   ├── tests/         # Unit tests

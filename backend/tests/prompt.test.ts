@@ -1,13 +1,13 @@
 /**
- * Unit tests for prompt building
+ * Unit tests for prompt/message building
  */
 
 import { describe, it, expect } from 'vitest';
-import { buildPrompt } from '../src/services/llm';
+import { buildMessages } from '../src/services/llm';
 import { RetrievedChunk } from '../src/types';
 
-describe('buildPrompt', () => {
-    it('builds prompt with retrieved chunks', () => {
+describe('buildMessages', () => {
+    it('builds messages with retrieved chunks', () => {
         const question = 'What is the refund policy?';
         const chunks: RetrievedChunk[] = [
             {
@@ -32,37 +32,50 @@ describe('buildPrompt', () => {
             },
         ];
 
-        const prompt = buildPrompt(question, chunks);
+        const messages = buildMessages(question, chunks);
 
-        // Check that prompt contains question
-        expect(prompt).toContain(question);
+        // Should return an array of messages
+        expect(Array.isArray(messages)).toBe(true);
+        expect(messages.length).toBeGreaterThanOrEqual(2);
 
-        // Check that prompt contains all chunk texts
-        expect(prompt).toContain('Full refund within 30 days.');
-        expect(prompt).toContain('Items must be in original condition.');
+        // First message should be system message
+        expect(messages[0].role).toBe('system');
+        const systemContent = messages[0].content as string;
 
-        // Check that prompt contains document titles
-        expect(prompt).toContain('Refund Policy');
-        expect(prompt).toContain('Return Guidelines');
+        // System message should contain chunk texts
+        expect(systemContent).toContain('Full refund within 30 days.');
+        expect(systemContent).toContain('Items must be in original condition.');
 
-        // Check structure
-        // Check structure
-        expect(prompt).toContain('KNOWLEDGE BASE:');
-        expect(prompt).toContain('CUSTOMER QUESTION:');
-        expect(prompt).toContain('YOUR RESPONSE:');
+        // System message should contain document titles
+        expect(systemContent).toContain('Refund Policy');
+        expect(systemContent).toContain('Return Guidelines');
+
+        // System message should contain knowledge base section
+        expect(systemContent).toContain('KNOWLEDGE BASE:');
+
+        // Last message should be user message with question
+        const lastMessage = messages[messages.length - 1];
+        expect(lastMessage.role).toBe('user');
+        expect(lastMessage.content).toBe(question);
     });
 
     it('handles empty chunks array', () => {
         const question = 'What is the meaning of life?';
         const chunks: RetrievedChunk[] = [];
 
-        const prompt = buildPrompt(question, chunks);
+        const messages = buildMessages(question, chunks);
 
-        // Should still contain the question
-        expect(prompt).toContain(question);
+        // Should still return messages
+        expect(Array.isArray(messages)).toBe(true);
+        expect(messages.length).toBeGreaterThanOrEqual(2);
 
-        // Should indicate no documents found
-        expect(prompt.toLowerCase()).toContain("don't have enough information");
+        // System message should indicate no documents found
+        const systemContent = messages[0].content as string;
+        expect(systemContent.toLowerCase()).toContain('no relevant documents');
+
+        // User message should contain the question
+        const lastMessage = messages[messages.length - 1];
+        expect(lastMessage.content).toBe(question);
     });
 
     it('numbers documents in order', () => {
@@ -79,9 +92,10 @@ describe('buildPrompt', () => {
             },
         ];
 
-        const prompt = buildPrompt('Question?', chunks);
+        const messages = buildMessages('Question?', chunks);
+        const systemContent = messages[0].content as string;
 
-        expect(prompt).toContain('[Document 1:');
-        expect(prompt).toContain('[Document 2:');
+        expect(systemContent).toContain('[Document 1:');
+        expect(systemContent).toContain('[Document 2:');
     });
 });

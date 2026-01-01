@@ -1,93 +1,52 @@
 /**
- * Text chunking service
- * Strategy: Fixed-size chunks with overlap for context preservation
+ * Text chunking service using chonkiejs
+ * 
+ * Strategy: Recursive structural chunking
+ * Attempts higher-level boundaries (paragraphs, sentences) before
+ * falling back to smaller units when chunks exceed the target size.
  */
 
+import { RecursiveChunker } from '@chonkiejs/core';
 import { Chunk, Document } from '../types';
+import { CHUNK_SIZE, MIN_CHARS_PER_CHUNK } from '../config/chunking';
 
-export interface ChunkingOptions {
-  chunkSize: number;    // Max characters per chunk
-  chunkOverlap: number; // Overlap between consecutive chunks
+// Lazy-loaded chunker instance (async initialization)
+let chunkerInstance: RecursiveChunker | null = null;
+
+async function getChunker(): Promise<RecursiveChunker> {
+  if (!chunkerInstance) {
+    // Use factory method as per chonkiejs docs
+    chunkerInstance = await RecursiveChunker.create({
+      chunkSize: CHUNK_SIZE,
+      minCharactersPerChunk: MIN_CHARS_PER_CHUNK
+    });
+  }
+  return chunkerInstance;
 }
 
-const DEFAULT_OPTIONS: ChunkingOptions = {
-  chunkSize: 500,
-  chunkOverlap: 50,
-};
-
 /**
- * Split text into overlapping chunks
+ * Split text into chunks using recursive structural strategy
+ * Hierarchy: paragraphs → sentences → punctuation → words → characters
  */
-export function chunkText(
-  text: string,
-  options: Partial<ChunkingOptions> = {}
-): string[] {
-  const { chunkSize, chunkOverlap } = { ...DEFAULT_OPTIONS, ...options };
-
-  // Validate: overlap must be less than chunk size to prevent infinite loop
-  if (chunkOverlap >= chunkSize) {
-    throw new Error('chunkOverlap must be less than chunkSize to prevent infinite loop');
-  }
-
+export async function chunkText(text: string): Promise<string[]> {
   if (!text || text.trim().length === 0) {
     return [];
   }
 
-  // If text is smaller than chunk size, return as single chunk
-  if (text.length <= chunkSize) {
-    return [text.trim()];
-  }
+  const chunker = await getChunker();
+  const chunks = await chunker.chunk(text);
 
-  const chunks: string[] = [];
-  let startIndex = 0;
-
-  while (startIndex < text.length) {
-    let endIndex = startIndex + chunkSize;
-
-    // If not at the end, try to break at a sentence boundary
-    if (endIndex < text.length) {
-      const searchWindow = text.slice(startIndex, endIndex);
-
-      // Look for sentence boundaries (., !, ?) near the end
-      const lastPeriod = searchWindow.lastIndexOf('. ');
-      const lastExclaim = searchWindow.lastIndexOf('! ');
-      const lastQuestion = searchWindow.lastIndexOf('? ');
-      const lastNewline = searchWindow.lastIndexOf('\n');
-
-      // Find the latest sentence boundary in the last 20% of the chunk
-      const minBoundary = Math.floor(chunkSize * 0.8);
-      const boundaries = [lastPeriod, lastExclaim, lastQuestion, lastNewline]
-        .filter(pos => pos >= minBoundary);
-
-      if (boundaries.length > 0) {
-        const bestBoundary = Math.max(...boundaries);
-        endIndex = startIndex + bestBoundary + 1; // Include the boundary char
-      }
-    }
-
-    const chunk = text.slice(startIndex, endIndex).trim();
-    if (chunk.length > 0) {
-      chunks.push(chunk);
-    }
-
-    // Move start, accounting for overlap
-    startIndex = endIndex - chunkOverlap;
-
-    // Prevent infinite loop if overlap >= chunk extracted
-    if (startIndex >= text.length - 1) break;
-  }
-
-  return chunks;
+  // Filter out empty/whitespace chunks (defensive)
+  return chunks
+    .map(c => c.text.trim())
+    .filter(Boolean);
 }
 
 /**
  * Chunk a document and return Chunk objects with metadata
  */
-export function chunkDocument(
-  document: Document,
-  options: Partial<ChunkingOptions> = {}
-): Chunk[] {
-  const textChunks = chunkText(document.content, options);
+export async function chunkDocument(document: Document): Promise<Chunk[]> {
+  const textChunks = await chunkText(document.content);
 
   return textChunks.map((text, index) => ({
     id: `${document.id}#chunk-${index}`,
@@ -101,9 +60,9 @@ export function chunkDocument(
 /**
  * Chunk multiple documents
  */
-export function chunkDocuments(
-  documents: Document[],
-  options: Partial<ChunkingOptions> = {}
-): Chunk[] {
-  return documents.flatMap(doc => chunkDocument(doc, options));
+export async function chunkDocuments(documents: Document[]): Promise<Chunk[]> {
+  const results = await Promise.all(
+    documents.map(doc => chunkDocument(doc))
+  );
+  return results.flat();
 }

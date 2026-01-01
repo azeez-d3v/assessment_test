@@ -69,7 +69,7 @@ async function syncIngest(documents: Array<{ id: string; title: string; content:
     const allChunks: Array<{ id: string; text: string; index: number; docId: string; title: string }> = [];
 
     for (const doc of documents) {
-        const chunks = chunkDocument(doc);
+        const chunks = await chunkDocument(doc);
         allChunks.push(...chunks);
     }
 

@@ -254,8 +254,8 @@ async function processDocument(bucket: string, s3Key: string, docId: string, tit
         content,
     };
 
-    // Chunk the document
-    const chunks = chunkDocument(document);
+    // Chunk the document (async with chonkiejs)
+    const chunks = await chunkDocument(document);
     console.log(`Created ${chunks.length} chunks`);
 
     if (chunks.length === 0) {

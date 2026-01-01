@@ -1,6 +1,6 @@
 {
     "name": "doc-qa-backend",
-    "version": "1.4.1",
+    "version": "1.5.0",
     "description": "Backend for Doc Q&A Portal - RAG with Pinecone and OpenRouter",
     "main": "dist/index.js",
     "scripts": {
@@ -14,6 +14,7 @@
         "@aws-sdk/client-sqs": "^3.960.0",
         "@aws-sdk/client-textract": "^3.958.0",
         "@aws-sdk/s3-request-presigner": "^3.958.0",
+        "@chonkiejs/core": "^0.0.5",
         "@pinecone-database/pinecone": "^6.1.3",
         "mammoth": "^1.11.0",
         "openai": "^6.15.0",

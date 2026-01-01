@@ -17,15 +17,17 @@ assessment_test/
 ├── frontend/          # Next.js application
 │   ├── app/           # App Router pages
 │   ├── components/    # React components
+│   ├── hooks/         # Custom hooks (useDocuments with SWR)
 │   └── lib/           # API utilities
 ├── backend/           # Lambda functions
 │   ├── src/
 │   │   ├── __tests__/ # Manual test scripts (chat history, openai sdk, etc)
+│   │   ├── config/    # Shared configuration (chunking constants)
 │   │   ├── handlers/  # Lambda handlers (ingest, ask, upload-url)
 │   │   ├── services/  # Business logic (chunking, embeddings, llm, pinecone, openai)
 │   │   ├── types/     # TypeScript interfaces
 │   │   └── utils/     # Validation schemas, response helpers
-│   ├── tests/         # Unit tests
+│   ├── tests/         # Unit tests (12 chunking + 3 prompt)
 │   └── template.yaml  # SAM infrastructure (with rate limiting)
 └── README.md
 ```
@@ -234,9 +236,10 @@ Update `NEXT_PUBLIC_API_URL` to your API Gateway endpoint.
 ## Assumptions & Trade-offs
 
 ### Chunking Strategy
-- Fixed-size chunks (500 chars) with overlap (50 chars)
-- Attempts to break at sentence boundaries
-- Simple but effective for most documents
+- **RecursiveChunker** via `@chonkiejs/core` library
+- Hierarchical splitting: paragraphs → sentences → punctuation → words → characters
+- Default chunk size: 1200 characters (~300-400 tokens, optimal for embedding quality)
+- Smarter than fixed-size: respects semantic boundaries
 
 ### Embedding & LLM
 - Powered by **OpenAI SDK** (configured for OpenRouter)

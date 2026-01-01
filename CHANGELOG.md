@@ -2,6 +2,25 @@
 
 All notable changes to the Doc Q&A Portal will be documented in this file.
 
+## [1.5.0] - 2026-01-02
+
+### Changed
+
+#### Chunking Strategy: chonkiejs Integration
+- **Migrated to `@chonkiejs/core`**: RecursiveChunker for smarter text splitting
+- **Hierarchical splitting**: Paragraphs → Sentences → Punctuation → Words → Characters
+- **Better RAG quality**: Chunks respect semantic boundaries, producing focused embeddings
+- **Optimized chunk size**: 1200 characters (~300-400 tokens) for better embedding quality
+- **No more overlap hacks**: Recursive strategy preserves context naturally
+
+### Added
+- **Shared config**: `src/config/chunking.ts` with `CHUNK_SIZE` and `MIN_CHARS_PER_CHUNK`
+- **Behavior-based tests**: Tests validate invariants (no data loss, size limits) not implementation
+
+### Technical
+- `chunkText()`, `chunkDocument()`, `chunkDocuments()` are now async
+- 12 tests covering chunking behavior including FAQ use case
+
 ## [1.4.1] - 2026-01-02
 
 ### Added

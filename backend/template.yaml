@@ -40,6 +40,30 @@ Resources:
         AllowMethods: "'GET, POST, DELETE, OPTIONS'"
         AllowHeaders: "'Content-Type'"
         AllowOrigin: "'*'"
+      # Enable throttling at the API stage level (10 requests per minute)
+      MethodSettings:
+        - ResourcePath: "/*"
+          HttpMethod: "*"
+          ThrottlingBurstLimit: 10
+          ThrottlingRateLimit: 0.17
+
+  # Usage Plan for API Rate Limiting
+  DocQaApiUsagePlan:
+    Type: AWS::ApiGateway::UsagePlan
+    DependsOn: DocQaApiprodStage
+    Properties:
+      UsagePlanName: doc-qa-usage-plan
+      Description: Rate limiting plan for Doc Q&A API
+      Throttle:
+        BurstLimit: 10         # Max concurrent requests
+        RateLimit: 0.17        # ~10 requests per minute (10/60)
+      Quota:
+        Limit: 10000       # Max requests per day
+        Period: DAY
+      ApiStages:
+        - ApiId: !Ref DocQaApi
+          Stage: prod
+
 
   # Ping Lambda Function (health check)
   PingFunction:

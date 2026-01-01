@@ -5,25 +5,12 @@
 
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { validateAskRequest } from '../utils/validation';
+import { createResponse } from '../utils/response';
 import { embedText } from '../services/embeddings';
 import { queryByVector } from '../services/pinecone';
 import { answerWithContext } from '../services/llm';
 import { AskResponse, Source } from '../types';
 import * as z from 'zod';
-
-/**
- * Create a standardized API response
- */
-function createResponse(statusCode: number, body: object): APIGatewayProxyResult {
-    return {
-        statusCode,
-        headers: {
-            'Content-Type': 'application/json',
-            'Access-Control-Allow-Origin': '*',
-        },
-        body: JSON.stringify(body),
-    };
-}
 
 /**
  * Lambda handler

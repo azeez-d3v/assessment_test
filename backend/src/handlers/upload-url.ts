@@ -6,6 +6,7 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import { createResponse } from '../utils/response';
 import { randomUUID } from 'crypto';
 
 const s3Client = new S3Client({});
@@ -21,20 +22,6 @@ const CONTENT_TYPES: Record<string, string> = {
     '.pdf': 'application/pdf',
     '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
 };
-
-/**
- * Create a standardized API response
- */
-function createResponse(statusCode: number, body: object): APIGatewayProxyResult {
-    return {
-        statusCode,
-        headers: {
-            'Content-Type': 'application/json',
-            'Access-Control-Allow-Origin': '*',
-        },
-        body: JSON.stringify(body),
-    };
-}
 
 /**
  * Extract file extension from filename

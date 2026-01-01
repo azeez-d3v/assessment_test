@@ -1,36 +1,14 @@
 /**
  * LLM service using OpenAI SDK with OpenRouter
  * Handles prompt building and answer generation for RAG
- * 
- * Using OpenAI SDK is cleaner and more standard - OpenRouter is fully compatible.
+ * Uses shared OpenAI client from openai.ts
  */
 
-import OpenAI from 'openai';
 import { RetrievedChunk, Message } from '../types';
 import { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
+import { getOpenAIClient } from './openai';
 
 const LLM_MODEL = process.env.LLM_MODEL || 'openai/gpt-4o-mini';
-
-// Lazy-loaded OpenAI client configured for OpenRouter (env vars not available at module load time)
-let openai: OpenAI | null = null;
-
-function getOpenAI(): OpenAI {
-    if (!openai) {
-        const apiKey = process.env.OPENROUTER_API_KEY;
-        if (!apiKey) {
-            throw new Error('OPENROUTER_API_KEY environment variable is required');
-        }
-        openai = new OpenAI({
-            baseURL: 'https://openrouter.ai/api/v1',
-            apiKey,
-            // defaultHeaders: {
-            //     'HTTP-Referer': process.env.APP_URL || 'https://doc-qa-portal.example.com',
-            //     'X-Title': 'Doc Q&A Portal',
-            // },
-        });
-    }
-    return openai;
-}
 
 /**
  * Build a RAG prompt with the question, retrieved context, and optional history
@@ -105,7 +83,7 @@ ${chunk.metadata.chunkText}`;
  * Generate an answer using OpenAI SDK (configured for OpenRouter)
  */
 export async function generateAnswer(messages: ChatCompletionMessageParam[]): Promise<string> {
-    const completion = await getOpenAI().chat.completions.create({
+    const completion = await getOpenAIClient().chat.completions.create({
         model: LLM_MODEL,
         messages: messages,
     });

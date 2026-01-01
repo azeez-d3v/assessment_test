@@ -22,10 +22,11 @@ assessment_test/
 │   ├── src/
 │   │   ├── __tests__/ # Manual test scripts (chat history, openai sdk, etc)
 │   │   ├── handlers/  # Lambda handlers (ingest, ask, upload-url)
-│   │   ├── services/  # Business logic (chunking, embeddings, llm, pinecone)
-│   │   └── utils/     # Validation schemas
+│   │   ├── services/  # Business logic (chunking, embeddings, llm, pinecone, openai)
+│   │   ├── types/     # TypeScript interfaces
+│   │   └── utils/     # Validation schemas, response helpers
 │   ├── tests/         # Unit tests
-│   └── template.yaml  # SAM infrastructure
+│   └── template.yaml  # SAM infrastructure (with rate limiting)
 └── README.md
 ```
 
@@ -324,11 +325,23 @@ The frontend includes several polish items with a **Claude-inspired aesthetic**:
 - **Empty State Handling**: Intelligent UI that detects when no documents are indexed, showing a warning banner identical to industry-standard interfaces.
 - **Smooth Animations**: Transitions for UI elements to prevent jarring layout shifts.
 
+### Rate Limiting (Production Ready)
+
+The API Gateway includes built-in rate limiting to prevent abuse:
+- **10 requests/minute** sustained rate
+- **10 requests** burst capacity
+- **10,000 requests/day** quota
+
+### Performance Optimizations
+
+- **Batch Vector Fetching**: Document listing uses optimized batch queries (10-100x faster)
+- **Parallel Ingestion**: Multiple documents are processed concurrently
+- **Shared Service Clients**: Single OpenAI client instance across services
+
 ### Future Enhancements
 
 While this assessment focused on delivering a robust, core RAG architecture and scalable ingestion pipeline, the following features would be prioritized for a production deployment:
 - Implement streaming responses
-- Add rate limiting and caching
-- Document versioning (implemented?)
+- Add caching layer for frequently accessed documents
+- Document versioning
 - Improve mobile responsiveness
-

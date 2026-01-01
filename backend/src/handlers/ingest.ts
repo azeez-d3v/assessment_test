@@ -7,6 +7,7 @@ import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { SQSClient, SendMessageCommand } from '@aws-sdk/client-sqs';
 import { validateIngestRequest } from '../utils/validation';
+import { createResponse } from '../utils/response';
 import * as z from 'zod';
 import { randomUUID } from 'crypto';
 
@@ -20,27 +21,14 @@ const QUEUE_URL = process.env.INGEST_QUEUE_URL || '';
 const isAsyncMode = () => Boolean(BUCKET && QUEUE_URL);
 
 /**
- * Create a standardized API response
- */
-function createResponse(statusCode: number, body: object): APIGatewayProxyResult {
-    return {
-        statusCode,
-        headers: {
-            'Content-Type': 'application/json',
-            'Access-Control-Allow-Origin': '*',
-        },
-        body: JSON.stringify(body),
-    };
-}
-
-/**
- * Async ingest: Write to S3 and queue to SQS
+ * Async ingest: Write to S3 and queue to SQS (parallelized)
  */
 async function asyncIngest(documents: Array<{ id: string; title: string; content: string }>) {
     const jobId = randomUUID();
     const jobs: Array<{ docId: string; s3Key: string }> = [];
 
-    for (const doc of documents) {
+    // Process all documents in parallel for better performance
+    await Promise.all(documents.map(async (doc) => {
         const s3Key = `ingest/${jobId}/${doc.id}.txt`;
 
         // Write document content to S3
@@ -65,7 +53,7 @@ async function asyncIngest(documents: Array<{ id: string; title: string; content
         }));
 
         jobs.push({ docId: doc.id, s3Key });
-    }
+    }));
 
     return { jobId, documentsQueued: jobs.length };
 }
@@ -78,7 +66,7 @@ async function syncIngest(documents: Array<{ id: string; title: string; content:
     const { embedTexts } = await import('../services/embeddings');
     const { upsertChunks } = await import('../services/pinecone');
 
-    const allChunks: any[] = [];
+    const allChunks: Array<{ id: string; text: string; index: number; docId: string; title: string }> = [];
 
     for (const doc of documents) {
         const chunks = chunkDocument(doc);
@@ -89,7 +77,7 @@ async function syncIngest(documents: Array<{ id: string; title: string; content:
         return { ingestedDocuments: documents.length, ingestedChunks: 0 };
     }
 
-    const chunkTexts = allChunks.map((c: any) => c.text);
+    const chunkTexts = allChunks.map((c) => c.text);
     const embeddings = await embedTexts(chunkTexts);
     await upsertChunks(allChunks, embeddings);
 

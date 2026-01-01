@@ -109,6 +109,46 @@ export default function HomePage() {
     navigator.clipboard.writeText(text)
   }
 
+  // Retry a failed response by replacing the assistant message (not duplicating)
+  const handleRetry = async (assistantMsgId: string, userQuestion: string) => {
+    // Set the assistant message back to loading state
+    setMessages((prev) =>
+      prev.map((msg) =>
+        msg.id === assistantMsgId
+          ? { ...msg, content: "", error: undefined, isLoading: true }
+          : msg
+      )
+    )
+
+    try {
+      // Find the message index to get proper history (exclude the retry pair)
+      const msgIndex = messages.findIndex((m) => m.id === assistantMsgId)
+      const history = messages
+        .slice(0, msgIndex - 1) // Exclude the user message being retried
+        .filter((m) => !m.isLoading && !m.error)
+        .map((m) => ({ role: m.role, content: m.content }))
+
+      const topK = Math.min(3, Math.max(1, documentCount || 0))
+      const result = await askQuestion(userQuestion, history, topK)
+
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.id === assistantMsgId
+            ? { ...msg, content: result.answer, sources: result.sources || [], isLoading: false }
+            : msg
+        )
+      )
+    } catch (err) {
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.id === assistantMsgId
+            ? { ...msg, error: err instanceof Error ? err.message : "Failed to get answer", isLoading: false }
+            : msg
+        )
+      )
+    }
+  }
+
   return (
     <div className="flex flex-col h-screen bg-bg-0">
       <Navigation />
@@ -203,7 +243,8 @@ export default function HomePage() {
                                       if (msgIndex > 0) {
                                         const userMsg = messages[msgIndex - 1]
                                         if (userMsg.role === "user") {
-                                          handleSendMessage({ message: userMsg.content, model: "auto" })
+                                          // Use handleRetry to replace the message, not duplicate
+                                          handleRetry(message.id, userMsg.content)
                                         }
                                       }
                                     }}

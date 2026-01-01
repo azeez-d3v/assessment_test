@@ -5,20 +5,7 @@
 
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { listDocuments, deleteByDocId, getDocumentContent } from '../services/pinecone';
-
-/**
- * Create a standardized API response
- */
-function createResponse(statusCode: number, body: object): APIGatewayProxyResult {
-    return {
-        statusCode,
-        headers: {
-            'Content-Type': 'application/json',
-            'Access-Control-Allow-Origin': '*',
-        },
-        body: JSON.stringify(body),
-    };
-}
+import { createResponse } from '../utils/response';
 
 /**
  * Lambda handler

@@ -1,6 +1,6 @@
 {
     "name": "doc-qa-backend",
-    "version": "1.0.0",
+    "version": "1.4.0",
     "description": "Backend for Doc Q&A Portal - RAG with Pinecone and OpenRouter",
     "main": "dist/index.js",
     "scripts": {

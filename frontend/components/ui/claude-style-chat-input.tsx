@@ -382,7 +382,14 @@ export function ClaudeChatInput({ placeholder = "How can I help you today?", onS
                 <FilePreviewCard
                   key={file.id}
                   file={file}
-                  onRemove={(id) => setFiles((prev) => prev.filter((f) => f.id !== id))}
+                  onRemove={(id) => {
+                    // Revoke blob URL to prevent memory leak
+                    const fileToRemove = files.find(f => f.id === id)
+                    if (fileToRemove?.preview) {
+                      URL.revokeObjectURL(fileToRemove.preview)
+                    }
+                    setFiles((prev) => prev.filter((f) => f.id !== id))
+                  }}
                 />
               ))}
             </div>

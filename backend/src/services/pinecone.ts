@@ -143,15 +143,28 @@ export async function listDocuments(): Promise<DocumentInfo[]> {
         paginationToken = result.pagination?.next;
     } while (paginationToken);
 
-    // Group by document ID
+    if (allIds.length === 0) {
+        return [];
+    }
+
+    // Batch fetch all vectors at once (in chunks of 100 to respect API limits)
+    // This fixes the N+1 query problem - we now fetch all vectors in batches
+    // instead of fetching one at a time for each unique document
+    const allRecords: Record<string, { metadata?: RecordMetadata }> = {};
+    for (let i = 0; i < allIds.length; i += 100) {
+        const batch = allIds.slice(i, i + 100);
+        const fetchResult = await index.fetch(batch);
+        Object.assign(allRecords, fetchResult.records);
+    }
+
+    // Group by document ID and extract metadata from fetched records
     const docMap = new Map<string, { title: string; count: number }>();
 
     for (const id of allIds) {
         const [docId] = id.split('#');
         if (!docMap.has(docId)) {
-            // Fetch one vector to get the title from metadata
-            const fetchResult = await index.fetch([id]);
-            const record = fetchResult.records[id];
+            // Get metadata from already-fetched records (no additional API calls!)
+            const record = allRecords[id];
             const title = (record?.metadata?.title as string) || docId;
             docMap.set(docId, { title, count: 1 });
         } else {

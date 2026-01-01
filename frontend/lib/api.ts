@@ -29,7 +29,8 @@ export async function askQuestion(question: string, messages: ApiMessage[] = [],
   })
 
   if (!response.ok) {
-    throw new Error("Failed to get answer")
+    const error = await response.json().catch(() => ({}))
+    throw new Error(error.message || error.error || "Failed to get answer")
   }
 
   return response.json()

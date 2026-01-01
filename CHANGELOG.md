@@ -2,6 +2,33 @@
 
 All notable changes to the Doc Q&A Portal will be documented in this file.
 
+## [1.4.0] - 2026-01-01
+
+### Added
+
+#### API Gateway Rate Limiting
+- **Usage Plan**: Added API rate limiting (10 req/min, burst of 10, 10k/day quota)
+- **Method Throttling**: Applied at API Gateway stage level for all endpoints
+
+#### Shared Utilities
+- **`response.ts`**: Extracted shared response helper from all handlers (reduced ~80 lines duplicate code)
+- **`openai.ts`**: Shared OpenAI client for LLM and embeddings services (single instance)
+
+### Fixed
+
+#### Critical Performance Issues
+- **N+1 Query Fix**: `listDocuments()` now batch-fetches all vectors instead of one-per-document (10-100x faster)
+- **Parallel Ingestion**: S3/SQS operations in `asyncIngest()` now run in parallel via `Promise.all()`
+
+#### Frontend Bugs
+- **Memory Leak**: Fixed blob URL leak by revoking `URL.createObjectURL()` when files are removed
+- **Retry Button**: Now replaces failed messages instead of duplicating them with new `handleRetry()` function
+- **Error Messages**: API errors now show actual server error message instead of generic "Failed to get answer"
+
+#### Code Quality
+- **Chunking Validation**: Added check to prevent infinite loop when `chunkOverlap >= chunkSize`
+- **Type Safety**: Replaced `any[]` with proper typed arrays in sync ingest handler
+
 ## [1.3.2] - 2025-12-30
 
 ### Added

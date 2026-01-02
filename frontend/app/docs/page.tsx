@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Navigation } from "@/components/navigation"
+import { FloatingHeader } from "@/components/ui/floating-header"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -267,9 +267,11 @@ export default function DocsPage() {
 
   return (
     <div className="min-h-screen bg-bg-0">
-      <Navigation />
+      <div className="px-4 pt-4">
+        <FloatingHeader />
+      </div>
 
-      <main className="flex flex-col items-center px-4 py-12 md:py-16">
+      <main className="flex flex-col items-center px-4 py-8 md:py-12">
         {/* Logo */}
         <div className="w-16 h-16 mb-6 flex items-center justify-center">
           <Icons.Logo className="w-full h-full" />

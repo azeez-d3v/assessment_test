@@ -2,6 +2,36 @@
 
 All notable changes to the Doc Q&A Portal will be documented in this file.
 
+## [1.5.1] - 2026-01-02
+
+### Added
+
+#### Floating Navbar
+- **New `FloatingHeader` component**: Modern floating navbar with glassmorphism effect
+- **GitHub button**: Quick access to repository with GitHub icon (lucide-react)
+- **Responsive mobile menu**: Sheet-based navigation for mobile devices
+- **Shorter nav labels**: "Chat" and "Documents" instead of verbose names
+
+#### Warning Banner Improvements
+- **AlertTriangle icon**: Added warning icon to no-documents banner
+- **Responsive text**: Shorter mobile text (`No docs · Limited response`) vs full desktop message
+- **Single-line layout**: All elements stay on one line across all screen sizes
+
+#### Backend: No-Documents Handling
+- **`hasDocuments()` function**: O(1) check using `describeIndexStats()` to detect empty index
+- **Greeting support**: Greetings now work even when no documents are uploaded
+- **Manual test suite**: Added `no-documents.test.ts` for verifying behavior
+
+### Changed
+- **Sheet component**: Added `showClose` prop for optional close button
+- **Nav hover styles**: Text-only hover effect (no background color)
+- **Mobile nav hover**: White text on hover for better visibility
+- **LLM prompt**: Stricter instructions to never answer substantive questions without documents
+- **Ask handler**: Skips embedding/query when index is empty, passes empty chunks to LLM
+
+### Removed
+- **Extended thinking button**: Commented out for future implementation
+
 ## [1.5.0] - 2026-01-02
 
 ### Changed

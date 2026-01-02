@@ -20,6 +20,9 @@ npx tsx src/__tests__/openai-sdk.test.ts
 
 # Verify PDF Parsing Library
 npx tsx src/__tests__/pdf-parse.test.ts
+
+# Verify No Documents Handling
+npx tsx src/__tests__/no-documents.test.ts
 ```
 
 ## Prerequisites

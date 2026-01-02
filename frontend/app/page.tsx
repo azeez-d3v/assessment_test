@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
-import { Navigation } from "@/components/navigation"
+import { FloatingHeader } from "@/components/ui/floating-header"
 import { ClaudeChatInput, Icons } from "@/components/ui/claude-style-chat-input"
 import { ShiningText } from "@/components/ui/shining-text"
 import { askQuestion } from "@/lib/api"
@@ -146,7 +146,9 @@ export default function HomePage() {
 
   return (
     <div className="flex flex-col h-screen bg-bg-0">
-      <Navigation />
+      <div className="px-4 pt-4">
+        <FloatingHeader />
+      </div>
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col overflow-hidden">

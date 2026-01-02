@@ -46,7 +46,10 @@ ${chunk.metadata.chunkText}`;
 
         systemContent += `\n\nKNOWLEDGE BASE:\n${context}`;
     } else {
-        systemContent += `\n\nNOTE: No relevant documents were found. If this is a greeting, respond warmly. If it's a substantive question, explain you can only help with uploaded documents.`;
+        systemContent += `\n\n**IMPORTANT:** No relevant content was found in the uploaded documents for this question.
+- If this is a greeting or small talk, you may respond warmly.
+- For ANY substantive questions, you MUST respond that you can only answer questions based on the uploaded documents, and suggest the user rephrase their question or upload relevant documents.
+- NEVER answer substantive questions using your general knowledge.`;
     }
 
     systemContent += `\n\nGUIDELINES:

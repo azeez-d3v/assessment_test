@@ -7,7 +7,7 @@ import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { validateAskRequest } from '../utils/validation';
 import { createResponse } from '../utils/response';
 import { embedText } from '../services/embeddings';
-import { queryByVector } from '../services/pinecone';
+import { queryByVector, hasDocuments } from '../services/pinecone';
 import { answerWithContext } from '../services/llm';
 import { AskResponse, Source } from '../types';
 import * as z from 'zod';
@@ -33,11 +33,20 @@ export async function handler(
 
         const request = validateAskRequest(parsedBody);
 
-        // Embed the question
-        const questionEmbedding = await embedText(request.question);
+        // Check if any documents exist in the index
+        const documentsExist = await hasDocuments();
 
-        // Query Pinecone for similar chunks
-        const retrievedChunks = await queryByVector(questionEmbedding, request.topK);
+        // If no documents exist, skip embedding/query and let LLM handle with empty chunks
+        // This allows greetings to still work while substantive questions get declined
+        let retrievedChunks: import('../types').RetrievedChunk[] = [];
+
+        if (documentsExist) {
+            // Embed the question
+            const questionEmbedding = await embedText(request.question);
+
+            // Query Pinecone for similar chunks
+            retrievedChunks = await queryByVector(questionEmbedding, request.topK);
+        }
 
         // Generate answer using LLM with retrieved context and chat history
         const answer = await answerWithContext(request.question, retrievedChunks, request.messages);

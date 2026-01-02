@@ -29,6 +29,17 @@ function getIndexName(): string {
 }
 
 /**
+ * Check if any documents exist in the index using describeIndexStats
+ * This is an O(1) operation - much more efficient than listing documents
+ */
+export async function hasDocuments(): Promise<boolean> {
+    const client = getClient();
+    const index = client.index(getIndexName());
+    const stats = await index.describeIndexStats();
+    return (stats.totalRecordCount ?? 0) > 0;
+}
+
+/**
  * Upsert chunks with their embeddings to Pinecone
  */
 export async function upsertChunks(

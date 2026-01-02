@@ -69,9 +69,10 @@ describe('buildMessages', () => {
         expect(Array.isArray(messages)).toBe(true);
         expect(messages.length).toBeGreaterThanOrEqual(2);
 
-        // System message should indicate no documents found
+        // System message should indicate no relevant content found with strict instructions
         const systemContent = messages[0].content as string;
-        expect(systemContent.toLowerCase()).toContain('no relevant documents');
+        expect(systemContent).toContain('No relevant content was found');
+        expect(systemContent).toContain('NEVER answer substantive questions using your general knowledge');
 
         // User message should contain the question
         const lastMessage = messages[messages.length - 1];

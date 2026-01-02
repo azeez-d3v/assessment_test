@@ -3,7 +3,7 @@
 import type React from "react"
 
 import { useState, useRef, useEffect, useCallback } from "react"
-import { Plus, ChevronDown, ArrowUp, X, FileText, Loader2, Check, Archive } from "lucide-react"
+import { Plus, ChevronDown, ArrowUp, X, FileText, Loader2, Check, Archive, AlertTriangle } from "lucide-react"
 import Image from "next/image"
 
 /* --- ICONS --- */
@@ -343,22 +343,20 @@ export function ClaudeChatInput({ placeholder = "How can I help you today?", onS
         <div style={{ height: 'auto' }}>
           <div className="w-full border-0.5 relative z-[5] px-3.5 -mb-2 rounded-t-xl border-b-0 pb-3 pt-2 bg-[#F2F0E9] border-transparent">
             <div className="w-full">
-              <div className="flex w-full flex-col items-center md:flex-row gap-2">
-                <div className="flex flex-row items-center gap-2 md:w-full text-[#5E5B54]">
-                  <div>
-                    <div className="text-[13px]">
-                      No documents found. Using <span className="underline underline-offset-[3px] decoration-[color-mix(in_srgb,currentColor,transparent_60%)]">general knowledge</span> only.
-                    </div>
-                  </div>
+              <div className="flex w-full items-center justify-between gap-3">
+                <div className="flex items-center gap-2 text-[#5E5B54] min-w-0">
+                  <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+                  <span className="text-[13px] truncate">
+                    <span className="md:hidden">No docs · <span className="underline underline-offset-[3px] decoration-[color-mix(in_srgb,currentColor,transparent_60%)]">Limited response</span></span>
+                    <span className="hidden md:inline">No documents found. <span className="underline underline-offset-[3px] decoration-[color-mix(in_srgb,currentColor,transparent_60%)]">Responses may be limited.</span></span>
+                  </span>
                 </div>
-                <div className="-mt-px w-full whitespace-nowrap md:w-fit">
-                  <a
-                    href="/docs"
-                    className="inline underline underline-offset-[3px] decoration-[color-mix(in_srgb,currentColor,transparent_60%)] hover:decoration-current cursor-pointer text-[13px] font-medium text-[#5E5B54]"
-                  >
-                    Upload Docs
-                  </a>
-                </div>
+                <a
+                  href="/docs"
+                  className="flex-shrink-0 underline underline-offset-[3px] decoration-[color-mix(in_srgb,currentColor,transparent_60%)] hover:decoration-current cursor-pointer text-[13px] font-medium text-[#5E5B54]"
+                >
+                  Upload
+                </a>
               </div>
             </div>
           </div>
@@ -422,6 +420,7 @@ export function ClaudeChatInput({ placeholder = "How can I help you today?", onS
               >
                 <Icons.Plus className="w-5 h-5" />
               </button>
+              {/* TODO: Extended thinking toggle - commented for future implementation
               <button
                 onClick={() => setIsThinkingEnabled(!isThinkingEnabled)}
                 className={`transition-all duration-200 h-8 w-8 flex items-center justify-center rounded-lg active:scale-95 ${isThinkingEnabled ? "text-accent bg-accent/10" : "text-text-400 hover:text-text-200 hover:bg-bg-200"}`}
@@ -430,6 +429,7 @@ export function ClaudeChatInput({ placeholder = "How can I help you today?", onS
               >
                 <Icons.Thinking className="w-5 h-5" />
               </button>
+              */}
             </div>
 
             <div className="flex flex-row items-center min-w-0 gap-1">

@@ -8,6 +8,7 @@ import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { createResponse } from '../utils/response';
 import { randomUUID } from 'crypto';
+import { ChunkingStrategy, DEFAULT_CHUNKING_STRATEGY } from '../config/chunking';
 
 const s3Client = new S3Client({});
 const BUCKET = process.env.DOC_BUCKET || '';
@@ -75,6 +76,13 @@ export async function handler(
         const { docId, title } = parseFilename(filename);
         const s3Key = `uploads/${uploadId}/${filename}`;
 
+        // Get chunking strategy from query params (default: recursive)
+        const strategyParam = event.queryStringParameters?.chunkingStrategy;
+        const chunkingStrategy: ChunkingStrategy =
+            (strategyParam === 'fixed' || strategyParam === 'recursive')
+                ? strategyParam
+                : DEFAULT_CHUNKING_STRATEGY;
+
         // Generate presigned URL (5-minute expiry)
         const command = new PutObjectCommand({
             Bucket: BUCKET,
@@ -84,6 +92,7 @@ export async function handler(
                 'doc-id': docId,
                 'doc-title': title,
                 'original-filename': filename,
+                'chunking-strategy': chunkingStrategy, // Store strategy for worker
             },
         });
 
@@ -94,6 +103,7 @@ export async function handler(
             s3Key,
             docId,
             title,
+            chunkingStrategy,
             expiresIn: 300,
         });
 

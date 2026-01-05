@@ -62,6 +62,7 @@ export async function upsertChunks(
             title: chunk.title,
             chunkText: chunk.text,
             chunkIndex: chunk.index,
+            chunkingStrategy: chunk.chunkingStrategy,
         } as RecordMetadata,
     }));
 

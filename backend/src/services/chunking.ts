@@ -1,21 +1,26 @@
 /**
- * Text chunking service using chonkiejs
+ * Text chunking service - supports multiple strategies
  * 
- * Strategy: Recursive structural chunking
- * Attempts higher-level boundaries (paragraphs, sentences) before
- * falling back to smaller units when chunks exceed the target size.
+ * Strategies:
+ * - 'recursive': chonkiejs hierarchical (paragraphs → sentences → words)
+ * - 'fixed': Fixed-size chunks with overlap
  */
 
 import { RecursiveChunker } from '@chonkiejs/core';
 import { Chunk, Document } from '../types';
-import { CHUNK_SIZE, MIN_CHARS_PER_CHUNK } from '../config/chunking';
+import {
+  CHUNK_SIZE,
+  MIN_CHARS_PER_CHUNK,
+  ChunkingStrategy,
+  DEFAULT_CHUNKING_STRATEGY
+} from '../config/chunking';
+import { chunkTextFixed, chunkDocumentFixed } from './chunking-fixed';
 
-// Lazy-loaded chunker instance (async initialization)
+// Lazy-loaded chunker instance for recursive strategy
 let chunkerInstance: RecursiveChunker | null = null;
 
-async function getChunker(): Promise<RecursiveChunker> {
+async function getRecursiveChunker(): Promise<RecursiveChunker> {
   if (!chunkerInstance) {
-    // Use factory method as per chonkiejs docs
     chunkerInstance = await RecursiveChunker.create({
       chunkSize: CHUNK_SIZE,
       minCharactersPerChunk: MIN_CHARS_PER_CHUNK
@@ -26,43 +31,64 @@ async function getChunker(): Promise<RecursiveChunker> {
 
 /**
  * Split text into chunks using recursive structural strategy
- * Hierarchy: paragraphs → sentences → punctuation → words → characters
  */
-export async function chunkText(text: string): Promise<string[]> {
+async function chunkTextRecursive(text: string): Promise<string[]> {
   if (!text || text.trim().length === 0) {
     return [];
   }
 
-  const chunker = await getChunker();
+  const chunker = await getRecursiveChunker();
   const chunks = await chunker.chunk(text);
 
-  // Filter out empty/whitespace chunks (defensive)
   return chunks
     .map(c => c.text.trim())
     .filter(Boolean);
 }
 
 /**
- * Chunk a document and return Chunk objects with metadata
+ * Split text into chunks using the specified strategy
  */
-export async function chunkDocument(document: Document): Promise<Chunk[]> {
-  const textChunks = await chunkText(document.content);
+export async function chunkText(
+  text: string,
+  strategy: ChunkingStrategy = DEFAULT_CHUNKING_STRATEGY
+): Promise<string[]> {
+  if (strategy === 'fixed') {
+    return chunkTextFixed(text);
+  }
+  return chunkTextRecursive(text);
+}
 
+/**
+ * Chunk a document using the specified strategy
+ */
+export async function chunkDocument(
+  document: Document,
+  strategy: ChunkingStrategy = DEFAULT_CHUNKING_STRATEGY
+): Promise<Chunk[]> {
+  if (strategy === 'fixed') {
+    return chunkDocumentFixed(document);
+  }
+
+  const textChunks = await chunkTextRecursive(document.content);
   return textChunks.map((text, index) => ({
     id: `${document.id}#chunk-${index}`,
     text,
     index,
     docId: document.id,
     title: document.title,
+    chunkingStrategy: 'recursive',
   }));
 }
 
 /**
- * Chunk multiple documents
+ * Chunk multiple documents using the specified strategy
  */
-export async function chunkDocuments(documents: Document[]): Promise<Chunk[]> {
+export async function chunkDocuments(
+  documents: Document[],
+  strategy: ChunkingStrategy = DEFAULT_CHUNKING_STRATEGY
+): Promise<Chunk[]> {
   const results = await Promise.all(
-    documents.map(doc => chunkDocument(doc))
+    documents.map(doc => chunkDocument(doc, strategy))
   );
   return results.flat();
 }

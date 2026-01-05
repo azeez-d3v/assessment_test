@@ -7,11 +7,13 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Switch } from "@/components/ui/switch"
 import { EditDocumentDialog } from "@/components/edit-document-dialog"
+import { UploadSettingsDialog } from "@/components/upload-settings-dialog"
 import { useToast } from "@/hooks/use-toast"
 import { useDocuments } from "@/hooks/use-documents"
 import { Toaster } from "@/components/ui/toaster"
-import { ingestDocuments, deleteDocument, getDocumentContent, getUploadUrl, uploadFileToS3, DocumentInfo } from "@/lib/api"
+import { ingestDocuments, deleteDocument, getDocumentContent, getUploadUrl, uploadFileToS3, DocumentInfo, ChunkingStrategy } from "@/lib/api"
 import { X, Loader2, Trash2, RefreshCw, Pencil, Upload, CloudUpload, Maximize } from "lucide-react"
 import { Icons } from "@/components/ui/claude-style-chat-input"
 
@@ -39,6 +41,15 @@ export default function DocsPage() {
   const [directUploadProgress, setDirectUploadProgress] = useState<number | null>(null)
   const [directUploading, setDirectUploading] = useState(false)
   const [isExpanded, setIsExpanded] = useState(false)
+
+  // Chunking strategy state
+  const [chunkingStrategy, setChunkingStrategy] = useState<ChunkingStrategy>('recursive')
+
+  // Upload dialog state
+  const [uploadDialogOpen, setUploadDialogOpen] = useState(false)
+  const [pendingUploadFile, setPendingUploadFile] = useState<File | null>(null)
+  const [uploadStrategy, setUploadStrategy] = useState<ChunkingStrategy>('recursive')
+
   const { toast } = useToast()
 
   // Handle file upload - reads .md/.txt files
@@ -86,8 +97,8 @@ export default function DocsPage() {
     event.target.value = ''
   }
 
-  // Handle direct S3 upload - uploads file directly to S3
-  const handleDirectUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  // Handle direct S3 upload - opens dialog to select chunking strategy
+  const handleDirectUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     if (!file) return
 
@@ -100,25 +111,41 @@ export default function DocsPage() {
         description: "Supported: .md, .txt, .pdf, .docx",
         variant: "destructive",
       })
+      event.target.value = ''
       return
     }
+
+    // Store file and open dialog
+    setPendingUploadFile(file)
+    setUploadStrategy('recursive') // Reset to default
+    setUploadDialogOpen(true)
+    event.target.value = ''
+  }
+
+  // Confirm upload from dialog
+  const confirmDirectUpload = async () => {
+    if (!pendingUploadFile) return
 
     setDirectUploading(true)
     setDirectUploadProgress(0)
 
     try {
-      // Get presigned URL
-      const { uploadUrl, docId, title } = await getUploadUrl(file.name)
+      // Get presigned URL with chunking strategy
+      const { uploadUrl, docId, title } = await getUploadUrl(pendingUploadFile.name, uploadStrategy)
 
       // Upload directly to S3
-      await uploadFileToS3(file, uploadUrl, (progress) => {
+      await uploadFileToS3(pendingUploadFile, uploadUrl, (progress) => {
         setDirectUploadProgress(progress)
       })
 
       toast({
         title: "Upload Complete",
-        description: `"${title}" (${docId}) uploaded and queued for processing`,
+        description: `"${title}" (${docId}) uploaded with ${uploadStrategy} chunking`,
       })
+
+      // Close dialog and refresh
+      setUploadDialogOpen(false)
+      setPendingUploadFile(null)
 
       // Refresh document list after a short delay to allow processing
       setTimeout(() => {
@@ -134,7 +161,6 @@ export default function DocsPage() {
     } finally {
       setDirectUploading(false)
       setDirectUploadProgress(null)
-      event.target.value = ''
     }
   }
 
@@ -175,10 +201,10 @@ export default function DocsPage() {
 
     setLoading(true)
     try {
-      await ingestDocuments(pendingDocs)
+      await ingestDocuments(pendingDocs, chunkingStrategy)
       toast({
         title: "Success",
-        description: `${pendingDocs.length} document(s) ingested successfully`,
+        description: `${pendingDocs.length} document(s) ingested with ${chunkingStrategy} chunking`,
       })
       setPendingDocs([])
       // Refresh the document list
@@ -471,6 +497,28 @@ export default function DocsPage() {
                 </div>
               )}
 
+              {/* Chunking Strategy Toggle */}
+              <div className="flex items-center justify-between p-3 rounded-lg border border-bg-300 bg-bg-50">
+                <div className="space-y-0.5">
+                  <Label className="text-text-200 font-medium">Chunking Strategy</Label>
+                  <p className="text-xs text-text-400">
+                    {chunkingStrategy === 'recursive'
+                      ? 'Smart splitting at paragraph boundaries'
+                      : 'Fixed 500-char chunks with overlap'
+                    }
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-text-400">
+                    {chunkingStrategy === 'recursive' ? 'Recursive' : 'Fixed'}
+                  </span>
+                  <Switch
+                    checked={chunkingStrategy === 'recursive'}
+                    onCheckedChange={(checked) => setChunkingStrategy(checked ? 'recursive' : 'fixed')}
+                  />
+                </div>
+              </div>
+
               <Button
                 onClick={handleAddToPending}
                 className="w-full bg-accent hover:bg-accent-hover text-white"
@@ -615,6 +663,20 @@ export default function DocsPage() {
         contentLoading={contentLoading}
         editLoading={editLoading}
         onSubmit={handleEditDocument}
+      />
+
+      {/* Upload Settings Dialog */}
+      <UploadSettingsDialog
+        open={uploadDialogOpen}
+        onOpenChange={(open) => {
+          setUploadDialogOpen(open)
+          if (!open) setPendingUploadFile(null)
+        }}
+        file={pendingUploadFile}
+        chunkingStrategy={uploadStrategy}
+        onStrategyChange={setUploadStrategy}
+        onConfirm={confirmDirectUpload}
+        isUploading={directUploading}
       />
 
       <Toaster />

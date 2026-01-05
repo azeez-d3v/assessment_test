@@ -119,6 +119,7 @@ pnpm test
 
 Tests cover:
 - **Chunking**: Text splitting, overlap, document metadata
+- **Dual Strategy Verification**: Explicit tests for fixed vs recursive strategy logic and switching
 - **Prompt Building**: RAG prompt construction, empty chunk handling
 
 ## API Endpoints
@@ -236,10 +237,17 @@ Update `NEXT_PUBLIC_API_URL` to your API Gateway endpoint.
 ## Assumptions & Trade-offs
 
 ### Chunking Strategy
-- **RecursiveChunker** via `@chonkiejs/core` library
-- Hierarchical splitting: paragraphs → sentences → punctuation → words → characters
-- Default chunk size: 1200 characters (~300-400 tokens, optimal for embedding quality)
-- Smarter than fixed-size: respects semantic boundaries
+- **Dual Strategy Support**: Choose between "Smart Recursive" and "Fixed-Size" chunking.
+- **RecursiveChunker (Default)**:
+  - Uses `@chonkiejs/core` library
+  - Hierarchical splitting: paragraphs → sentences → punctuation → words → characters
+  - Best for prose, articles, FAQs (preserves semantic context)
+  - Chunk size: ~1200 characters (~300-400 tokens)
+- **Fixed-Size Chunking (Legacy/Technical)**:
+  - Traditional fixed window with overlap
+  - Best for dense technical documents, code, or data-heavy text
+  - Chunk size: 500 characters, Overlap: 50 characters
+- **Selection**: Configurable via frontend toggle (API/form) or upload dialog (S3 direct)
 
 ### Embedding & LLM
 - Powered by **OpenAI SDK** (configured for OpenRouter)

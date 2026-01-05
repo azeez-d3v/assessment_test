@@ -2,6 +2,29 @@
 
 All notable changes to the Doc Q&A Portal will be documented in this file.
 
+## [1.5.3] - 2026-01-05
+
+### Added
+
+#### Dual Chunking Strategy
+- **Frontend Toggle**: Switch between **Smart Recursive** and **Fixed-Size** chunking during ingestion
+- **Fixed-Size Strategy**: Restored 500-char chunks with overlap (best for code/dense docs)
+- **Recursive Strategy (Default)**: Existing chonkiejs implementation (best for large docs, articles)
+- **S3 Upload Dialog**: New settings dialog when uploading files to S3 to select strategy
+- **Metadata Storage**: Strategy used is stored in Pinecone metadata for tracking
+
+### Technical
+- **Config**: Added shared constants for fixed chunking (size=500, overlap=50)
+- **API**: `/ingest` and `/upload-url` endpoints now accept `chunkingStrategy` param
+- **Handlers**: Updated worker to read strategy from SQS message or S3 metadata
+
+### Changed
+- **UX Refinements**: 
+  - Upload dialog cards are now fully clickable
+  - Improved button spacing and hover states (matching theme colors)
+  - Explicit pointer cursors for better interactivity
+- **Testing**: Added comprehensive `chunking-strategy.test.ts` covering logic, overlap, and metadata persistence (18 tests total)
+
 ## [1.5.2] - 2026-01-03
 
 ### Changed

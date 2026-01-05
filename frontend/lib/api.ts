@@ -36,13 +36,18 @@ export async function askQuestion(question: string, messages: ApiMessage[] = [],
   return response.json()
 }
 
-export async function ingestDocuments(documents: Array<{ id: string; title: string; content: string }>) {
+export type ChunkingStrategy = 'fixed' | 'recursive';
+
+export async function ingestDocuments(
+  documents: Array<{ id: string; title: string; content: string }>,
+  chunkingStrategy: ChunkingStrategy = 'recursive'
+) {
   const response = await fetch(`${API_URL}/ingest`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ documents }),
+    body: JSON.stringify({ documents, chunkingStrategy }),
   })
 
   if (!response.ok) {
@@ -91,8 +96,15 @@ export async function getDocumentContent(docId: string): Promise<{ title: string
 /**
  * Get a presigned URL for direct S3 file upload
  */
-export async function getUploadUrl(filename: string): Promise<UploadUrlResponse> {
-  const response = await fetch(`${API_URL}/upload-url?filename=${encodeURIComponent(filename)}`, {
+export async function getUploadUrl(
+  filename: string,
+  chunkingStrategy: ChunkingStrategy = 'recursive'
+): Promise<UploadUrlResponse> {
+  const params = new URLSearchParams({
+    filename,
+    chunkingStrategy,
+  })
+  const response = await fetch(`${API_URL}/upload-url?${params}`, {
     method: "GET",
   })
 

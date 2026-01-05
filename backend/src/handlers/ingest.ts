@@ -23,7 +23,10 @@ const isAsyncMode = () => Boolean(BUCKET && QUEUE_URL);
 /**
  * Async ingest: Write to S3 and queue to SQS (parallelized)
  */
-async function asyncIngest(documents: Array<{ id: string; title: string; content: string }>) {
+async function asyncIngest(
+    documents: Array<{ id: string; title: string; content: string }>,
+    chunkingStrategy: 'fixed' | 'recursive' = 'recursive'
+) {
     const jobId = randomUUID();
     const jobs: Array<{ docId: string; s3Key: string }> = [];
 
@@ -49,6 +52,7 @@ async function asyncIngest(documents: Array<{ id: string; title: string; content
                     id: doc.id,
                     title: doc.title,
                 },
+                chunkingStrategy, // Pass strategy to worker
             }),
         }));
 
@@ -61,7 +65,10 @@ async function asyncIngest(documents: Array<{ id: string; title: string; content
 /**
  * Sync ingest: Process immediately (fallback for local dev)
  */
-async function syncIngest(documents: Array<{ id: string; title: string; content: string }>) {
+async function syncIngest(
+    documents: Array<{ id: string; title: string; content: string }>,
+    chunkingStrategy: 'fixed' | 'recursive' = 'recursive'
+) {
     const { chunkDocument } = await import('../services/chunking');
     const { embedTexts } = await import('../services/embeddings');
     const { upsertChunks } = await import('../services/pinecone');
@@ -69,7 +76,7 @@ async function syncIngest(documents: Array<{ id: string; title: string; content:
     const allChunks: Array<{ id: string; text: string; index: number; docId: string; title: string }> = [];
 
     for (const doc of documents) {
-        const chunks = await chunkDocument(doc);
+        const chunks = await chunkDocument(doc, chunkingStrategy);
         allChunks.push(...chunks);
     }
 
@@ -114,16 +121,17 @@ export async function handler(
 
         // Use async mode if S3/SQS are configured, otherwise sync
         if (isAsyncMode()) {
-            const result = await asyncIngest(request.documents);
+            const result = await asyncIngest(request.documents, request.chunkingStrategy);
             return createResponse(202, {
                 status: 'accepted',
                 message: 'Documents queued for processing',
+                chunkingStrategy: request.chunkingStrategy,
                 ...result,
             });
         } else {
             // Sync fallback for local development
-            const result = await syncIngest(request.documents);
-            return createResponse(200, result);
+            const result = await syncIngest(request.documents, request.chunkingStrategy);
+            return createResponse(200, { ...result, chunkingStrategy: request.chunkingStrategy });
         }
 
     } catch (error) {

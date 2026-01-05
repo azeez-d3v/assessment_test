@@ -12,6 +12,7 @@ import { chunkDocument } from '../services/chunking';
 import { embedTexts } from '../services/embeddings';
 import { upsertChunks } from '../services/pinecone';
 import { Document } from '../types';
+import { ChunkingStrategy, DEFAULT_CHUNKING_STRATEGY } from '../config/chunking';
 
 const s3Client = new S3Client({});
 const textractClient = new TextractClient({});
@@ -33,6 +34,7 @@ interface ApiIngestJob {
         id: string;
         title: string;
     };
+    chunkingStrategy?: ChunkingStrategy; // Optional: defaults to recursive
 }
 
 /**
@@ -61,7 +63,7 @@ function isS3EventRecord(body: unknown): body is S3Event {
 /**
  * Extract document metadata from S3 object
  */
-async function getDocumentMetadata(bucket: string, key: string): Promise<{ docId: string; title: string }> {
+async function getDocumentMetadata(bucket: string, key: string): Promise<{ docId: string; title: string; chunkingStrategy: ChunkingStrategy }> {
     try {
         const headResult = await s3Client.send(new HeadObjectCommand({
             Bucket: bucket,
@@ -70,10 +72,17 @@ async function getDocumentMetadata(bucket: string, key: string): Promise<{ docId
 
         // Try to get metadata from S3 object
         const metadata = headResult.Metadata || {};
+        const strategyFromMeta = metadata['chunking-strategy'];
+        const chunkingStrategy: ChunkingStrategy =
+            (strategyFromMeta === 'fixed' || strategyFromMeta === 'recursive')
+                ? strategyFromMeta
+                : DEFAULT_CHUNKING_STRATEGY;
+
         if (metadata['doc-id'] && metadata['doc-title']) {
             return {
                 docId: metadata['doc-id'],
                 title: metadata['doc-title'],
+                chunkingStrategy,
             };
         }
     } catch (err) {
@@ -88,6 +97,7 @@ async function getDocumentMetadata(bucket: string, key: string): Promise<{ docId
     return {
         docId,
         title: baseName || 'Untitled',
+        chunkingStrategy: DEFAULT_CHUNKING_STRATEGY,
     };
 }
 
@@ -236,8 +246,14 @@ async function extractText(bucket: string, key: string): Promise<string> {
 /**
  * Process a document from S3
  */
-async function processDocument(bucket: string, s3Key: string, docId: string, title: string): Promise<void> {
-    console.log(`Processing document ${docId} from ${s3Key}`);
+async function processDocument(
+    bucket: string,
+    s3Key: string,
+    docId: string,
+    title: string,
+    chunkingStrategy: ChunkingStrategy = DEFAULT_CHUNKING_STRATEGY
+): Promise<void> {
+    console.log(`Processing document ${docId} from ${s3Key} with ${chunkingStrategy} chunking`);
 
     // Extract text content based on file type
     const content = await extractText(bucket, s3Key);
@@ -254,9 +270,9 @@ async function processDocument(bucket: string, s3Key: string, docId: string, tit
         content,
     };
 
-    // Chunk the document (async with chonkiejs)
-    const chunks = await chunkDocument(document);
-    console.log(`Created ${chunks.length} chunks`);
+    // Chunk the document with specified strategy
+    const chunks = await chunkDocument(document, chunkingStrategy);
+    console.log(`Created ${chunks.length} chunks using ${chunkingStrategy} strategy`);
 
     if (chunks.length === 0) {
         console.log('No chunks to process, skipping');
@@ -285,7 +301,8 @@ async function processDocument(bucket: string, s3Key: string, docId: string, tit
  */
 async function processApiJob(job: ApiIngestJob): Promise<void> {
     console.log(`Processing API job ${job.jobId} for document ${job.document.id}`);
-    await processDocument(BUCKET, job.s3Key, job.document.id, job.document.title);
+    const strategy = job.chunkingStrategy || DEFAULT_CHUNKING_STRATEGY;
+    await processDocument(BUCKET, job.s3Key, job.document.id, job.document.title, strategy);
 }
 
 /**
@@ -305,9 +322,9 @@ async function processS3Event(s3Event: S3Event): Promise<void> {
             continue;
         }
 
-        // Get document metadata
-        const { docId, title } = await getDocumentMetadata(bucket, key);
-        await processDocument(bucket, key, docId, title);
+        // Get document metadata (includes chunking strategy from S3 metadata)
+        const { docId, title, chunkingStrategy } = await getDocumentMetadata(bucket, key);
+        await processDocument(bucket, key, docId, title, chunkingStrategy);
     }
 }
 

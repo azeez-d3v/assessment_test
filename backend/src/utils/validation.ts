@@ -11,9 +11,13 @@ export const DocumentSchema = z.object({
     content: z.string().min(1, 'Document content is required'),
 });
 
+// Chunking strategy enum
+export const ChunkingStrategySchema = z.enum(['fixed', 'recursive']);
+
 // Ingest request schema
 export const IngestRequestSchema = z.object({
     documents: z.array(DocumentSchema).min(1, 'At least one document is required'),
+    chunkingStrategy: ChunkingStrategySchema.optional().default('recursive'),
 });
 
 // Message schema

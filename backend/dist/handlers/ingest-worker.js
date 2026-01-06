@@ -136,7 +136,7 @@ async function extractTextWithPdfParse(bucket, key) {
     const pdfParse = (await Promise.resolve().then(() => __importStar(require('pdf-parse-new')))).default;
     const result = await pdfParse(buffer);
     console.log(`Extracted ${result.text.length} chars from PDF using pdf-parse-new`);
-    return result.text;
+    return { content: result.text, method: 'pdf-parse' };
 }
 /**
  * Extract text from PDF using Azure Document Intelligence (if configured),
@@ -162,7 +162,7 @@ async function extractTextFromPDF(bucket, key) {
             console.log(`Extracting text from PDF using Azure Document Intelligence: ${key}`);
             const content = await (0, azure_doc_intel_1.analyzeDocumentWithAzure)(buffer);
             console.log(`Extracted ${content.length} chars from PDF using Azure (Markdown format)`);
-            return content;
+            return { content, method: 'azure' };
         }
         catch (azureError) {
             console.log(`Azure Document Intelligence failed, falling back to Textract:`, azureError);
@@ -189,7 +189,7 @@ async function extractTextFromPDF(bucket, key) {
         }
         const text = lines.join('\n');
         console.log(`Extracted ${text.length} chars from PDF using Textract`);
-        return text;
+        return { content: text, method: 'textract' };
     }
     catch (error) {
         // Fall back to pdf-parse for certain errors
@@ -234,7 +234,7 @@ async function extractTextFromDOCX(bucket, key) {
     // Extract text using Mammoth
     const result = await mammoth_1.default.extractRawText({ buffer });
     console.log(`Extracted ${result.value.length} chars from DOCX`);
-    return result.value;
+    return { content: result.value, method: 'mammoth' };
 }
 /**
  * Extract text from plain text files (.txt, .md)
@@ -247,7 +247,7 @@ async function extractTextFromPlainText(bucket, key) {
     }));
     const content = await getResult.Body?.transformToString() || '';
     console.log(`Read ${content.length} chars from plain text`);
-    return content;
+    return { content, method: 'text' };
 }
 /**
  * Extract text from document based on file type
@@ -274,11 +274,12 @@ async function extractText(bucket, key) {
 async function processDocument(bucket, s3Key, docId, title, chunkingStrategy = chunking_2.DEFAULT_CHUNKING_STRATEGY) {
     console.log(`Processing document ${docId} from ${s3Key} with ${chunkingStrategy} chunking`);
     // Extract text content based on file type
-    const content = await extractText(bucket, s3Key);
+    const { content, method: extractionMethod } = await extractText(bucket, s3Key);
     if (!content.trim()) {
         console.log('Empty document content, skipping');
         return;
     }
+    console.log(`Using extraction method: ${extractionMethod}`);
     // Create full document object
     const document = {
         id: docId,
@@ -292,12 +293,17 @@ async function processDocument(bucket, s3Key, docId, title, chunkingStrategy = c
         console.log('No chunks to process, skipping');
         return;
     }
+    // Add extractionMethod to each chunk
+    const chunksWithMethod = chunks.map(chunk => ({
+        ...chunk,
+        extractionMethod,
+    }));
     // Generate embeddings for all chunks
-    const texts = chunks.map(c => c.text);
+    const texts = chunksWithMethod.map(c => c.text);
     const embeddings = await (0, embeddings_1.embedTexts)(texts);
     console.log(`Generated ${embeddings.length} embeddings`);
     // Upsert to Pinecone
-    await (0, pinecone_1.upsertChunks)(chunks, embeddings);
+    await (0, pinecone_1.upsertChunks)(chunksWithMethod, embeddings);
     console.log(`Upserted to Pinecone`);
     // Delete the S3 object (cleanup)
     await s3Client.send(new client_s3_1.DeleteObjectCommand({

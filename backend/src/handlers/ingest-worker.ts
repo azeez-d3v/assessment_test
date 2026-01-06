@@ -105,7 +105,7 @@ async function getDocumentMetadata(bucket: string, key: string): Promise<{ docId
 /**
  * Extract text from PDF using pdf-parse-new (fallback method)
  */
-async function extractTextWithPdfParse(bucket: string, key: string): Promise<string> {
+async function extractTextWithPdfParse(bucket: string, key: string): Promise<{ content: string; method: string }> {
     console.log(`Extracting text from PDF using pdf-parse-new (fallback): ${key}`);
 
     // Get the PDF file from S3
@@ -128,14 +128,14 @@ async function extractTextWithPdfParse(bucket: string, key: string): Promise<str
     const pdfParse = (await import('pdf-parse-new')).default;
     const result = await pdfParse(buffer);
     console.log(`Extracted ${result.text.length} chars from PDF using pdf-parse-new`);
-    return result.text;
+    return { content: result.text, method: 'pdf-parse' };
 }
 
 /**
  * Extract text from PDF using Azure Document Intelligence (if configured),
  * with fallback to AWS Textract, then pdf-parse
  */
-async function extractTextFromPDF(bucket: string, key: string): Promise<string> {
+async function extractTextFromPDF(bucket: string, key: string): Promise<{ content: string; method: string }> {
     // Get PDF buffer from S3 (needed for Azure)
     const getResult = await s3Client.send(new GetObjectCommand({
         Bucket: bucket,
@@ -157,7 +157,7 @@ async function extractTextFromPDF(bucket: string, key: string): Promise<string> 
             console.log(`Extracting text from PDF using Azure Document Intelligence: ${key}`);
             const content = await analyzeDocumentWithAzure(buffer);
             console.log(`Extracted ${content.length} chars from PDF using Azure (Markdown format)`);
-            return content;
+            return { content, method: 'azure' };
         } catch (azureError) {
             console.log(`Azure Document Intelligence failed, falling back to Textract:`, azureError);
             // Fall through to Textract
@@ -187,7 +187,7 @@ async function extractTextFromPDF(bucket: string, key: string): Promise<string> 
 
         const text = lines.join('\n');
         console.log(`Extracted ${text.length} chars from PDF using Textract`);
-        return text;
+        return { content: text, method: 'textract' };
     } catch (error: unknown) {
         // Fall back to pdf-parse for certain errors
         const errorName = (error as { name?: string })?.name || '';
@@ -214,7 +214,7 @@ async function extractTextFromPDF(bucket: string, key: string): Promise<string> 
 /**
  * Extract text from DOCX using Mammoth
  */
-async function extractTextFromDOCX(bucket: string, key: string): Promise<string> {
+async function extractTextFromDOCX(bucket: string, key: string): Promise<{ content: string; method: string }> {
     console.log(`Extracting text from DOCX using Mammoth: ${key}`);
 
     // Get the DOCX file from S3
@@ -236,13 +236,13 @@ async function extractTextFromDOCX(bucket: string, key: string): Promise<string>
     // Extract text using Mammoth
     const result = await mammoth.extractRawText({ buffer });
     console.log(`Extracted ${result.value.length} chars from DOCX`);
-    return result.value;
+    return { content: result.value, method: 'mammoth' };
 }
 
 /**
  * Extract text from plain text files (.txt, .md)
  */
-async function extractTextFromPlainText(bucket: string, key: string): Promise<string> {
+async function extractTextFromPlainText(bucket: string, key: string): Promise<{ content: string; method: string }> {
     console.log(`Reading plain text file: ${key}`);
 
     const getResult = await s3Client.send(new GetObjectCommand({
@@ -252,13 +252,13 @@ async function extractTextFromPlainText(bucket: string, key: string): Promise<st
 
     const content = await getResult.Body?.transformToString() || '';
     console.log(`Read ${content.length} chars from plain text`);
-    return content;
+    return { content, method: 'text' };
 }
 
 /**
  * Extract text from document based on file type
  */
-async function extractText(bucket: string, key: string): Promise<string> {
+async function extractText(bucket: string, key: string): Promise<{ content: string; method: string }> {
     const ext = getFileExtension(key);
 
     if (PDF_EXTENSIONS.includes(ext)) {
@@ -286,12 +286,14 @@ async function processDocument(
     console.log(`Processing document ${docId} from ${s3Key} with ${chunkingStrategy} chunking`);
 
     // Extract text content based on file type
-    const content = await extractText(bucket, s3Key);
+    const { content, method: extractionMethod } = await extractText(bucket, s3Key);
 
     if (!content.trim()) {
         console.log('Empty document content, skipping');
         return;
     }
+
+    console.log(`Using extraction method: ${extractionMethod}`);
 
     // Create full document object
     const document: Document = {
@@ -309,13 +311,19 @@ async function processDocument(
         return;
     }
 
+    // Add extractionMethod to each chunk
+    const chunksWithMethod = chunks.map(chunk => ({
+        ...chunk,
+        extractionMethod,
+    }));
+
     // Generate embeddings for all chunks
-    const texts = chunks.map(c => c.text);
+    const texts = chunksWithMethod.map(c => c.text);
     const embeddings = await embedTexts(texts);
     console.log(`Generated ${embeddings.length} embeddings`);
 
     // Upsert to Pinecone
-    await upsertChunks(chunks, embeddings);
+    await upsertChunks(chunksWithMethod, embeddings);
     console.log(`Upserted to Pinecone`);
 
     // Delete the S3 object (cleanup)

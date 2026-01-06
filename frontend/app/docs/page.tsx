@@ -10,11 +10,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Switch } from "@/components/ui/switch"
 import { EditDocumentDialog } from "@/components/edit-document-dialog"
 import { UploadSettingsDialog } from "@/components/upload-settings-dialog"
+import { IngestedDocumentsList } from "@/components/docs/ingested-documents-list"
 import { useToast } from "@/hooks/use-toast"
 import { useDocuments } from "@/hooks/use-documents"
 import { Toaster } from "@/components/ui/toaster"
 import { ingestDocuments, deleteDocument, getDocumentContent, getUploadUrl, uploadFileToS3, DocumentInfo, ChunkingStrategy } from "@/lib/api"
-import { X, Loader2, Trash2, RefreshCw, Pencil, Upload, CloudUpload, Maximize } from "lucide-react"
+import { X, Loader2, Upload, CloudUpload, Maximize } from "lucide-react"
 import { Icons } from "@/components/ui/claude-style-chat-input"
 
 interface PendingDocument {
@@ -583,75 +584,14 @@ export default function DocsPage() {
         </div>
 
         {/* Ingested Documents Section */}
-        <Card className="w-full max-w-5xl mt-8 border-bg-300 bg-bg-100">
-          <CardHeader className="flex flex-row items-center justify-between">
-            <div>
-              <CardTitle className="text-text-100">Ingested Documents ({ingestedDocs.length})</CardTitle>
-              <CardDescription className="text-text-400">Documents stored in your knowledge base</CardDescription>
-            </div>
-            <Button
-              onClick={() => refreshDocs()}
-              variant="outline"
-              size="sm"
-              disabled={listLoading}
-              className="border-bg-300 text-text-200 hover:bg-bg-200"
-            >
-              {listLoading ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <RefreshCw className="h-4 w-4" />
-              )}
-            </Button>
-          </CardHeader>
-          <CardContent>
-            {listLoading && ingestedDocs.length === 0 ? (
-              <div className="flex h-32 items-center justify-center">
-                <Loader2 className="h-6 w-6 animate-spin text-accent" />
-              </div>
-            ) : ingestedDocs.length === 0 ? (
-              <div className="flex h-32 items-center justify-center rounded-lg border border-dashed border-bg-300">
-                <p className="text-sm text-text-400">No documents ingested yet</p>
-              </div>
-            ) : (
-              <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-                {ingestedDocs.map((doc) => (
-                  <div key={doc.docId} className="group relative rounded-lg border border-bg-300 bg-bg-200/50 p-4">
-                    <div className="space-y-2 pr-16">
-                      <h4 className="font-semibold text-sm text-text-100 truncate">{doc.title}</h4>
-                      <p className="text-xs text-text-400">ID: {doc.docId}</p>
-                      <p className="text-xs text-text-300">{doc.chunkCount} chunk{doc.chunkCount > 1 ? "s" : ""}</p>
-                    </div>
-                    <div className="absolute right-2 top-2 flex gap-1 opacity-0 transition-all group-hover:opacity-100">
-                      <Button
-                        onClick={() => handleOpenEditDialog(doc)}
-                        variant="ghost"
-                        size="sm"
-                        className="h-8 w-8 p-0 text-text-400 hover:bg-bg-300 hover:text-text-200"
-                        aria-label="Edit document"
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        onClick={() => handleDeleteDocument(doc.docId)}
-                        variant="ghost"
-                        size="sm"
-                        disabled={deleteLoading === doc.docId}
-                        className="h-8 w-8 p-0 text-text-400 hover:bg-destructive/10 hover:text-destructive"
-                        aria-label="Delete document"
-                      >
-                        {deleteLoading === doc.docId ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <Trash2 className="h-4 w-4" />
-                        )}
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+        <IngestedDocumentsList
+          documents={ingestedDocs}
+          isLoading={listLoading}
+          onRefresh={() => refreshDocs()}
+          onEdit={handleOpenEditDialog}
+          onDelete={handleDeleteDocument}
+          deleteLoading={deleteLoading}
+        />
       </main >
 
       {/* Edit Document Dialog */}

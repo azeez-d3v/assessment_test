@@ -13,6 +13,7 @@ export interface Chunk {
     docId: string;
     title: string;
     chunkingStrategy?: string;
+    extractionMethod?: string;
 }
 export interface IngestRequest {
     documents: Document[];
@@ -44,6 +45,7 @@ export interface VectorMetadata {
     chunkText: string;
     chunkIndex: number;
     chunkingStrategy?: string;
+    extractionMethod?: string;
 }
 export interface RetrievedChunk {
     id: string;

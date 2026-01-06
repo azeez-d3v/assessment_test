@@ -27,6 +27,8 @@ export interface DocumentInfo {
     docId: string;
     title: string;
     chunkCount: number;
+    chunkingStrategy?: string;
+    extractionMethod?: string;
 }
 export declare function listDocuments(): Promise<DocumentInfo[]>;
 /**

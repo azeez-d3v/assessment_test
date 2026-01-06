@@ -40,12 +40,20 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.isAzureConfigured = isAzureConfigured;
 exports.analyzeDocumentWithAzure = analyzeDocumentWithAzure;
 const ai_document_intelligence_1 = __importStar(require("@azure-rest/ai-document-intelligence"));
-const endpoint = process.env.AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT || '';
-const key = process.env.AZURE_DOCUMENT_INTELLIGENCE_KEY || '';
+/**
+ * Get Azure credentials (lazy-loaded to support dotenv)
+ */
+function getAzureCredentials() {
+    return {
+        endpoint: process.env.AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT || '',
+        key: process.env.AZURE_DOCUMENT_INTELLIGENCE_KEY || '',
+    };
+}
 /**
  * Check if Azure Document Intelligence is configured
  */
 function isAzureConfigured() {
+    const { endpoint, key } = getAzureCredentials();
     return !!(endpoint && key);
 }
 /**
@@ -57,6 +65,8 @@ async function analyzeDocumentWithAzure(buffer) {
         throw new Error('Azure Document Intelligence is not configured');
     }
     console.log('Analyzing document with Azure Document Intelligence...');
+    // Get credentials (lazy-loaded)
+    const { endpoint, key } = getAzureCredentials();
     // Create client with API key
     const client = (0, ai_document_intelligence_1.default)(endpoint, {
         key,

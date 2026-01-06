@@ -4,6 +4,8 @@ export interface DocumentInfo {
   docId: string
   title: string
   chunkCount: number
+  chunkingStrategy?: string
+  extractionMethod?: string
 }
 
 export interface UploadUrlResponse {

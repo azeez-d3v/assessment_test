@@ -63,6 +63,7 @@ export async function upsertChunks(
             chunkText: chunk.text,
             chunkIndex: chunk.index,
             chunkingStrategy: chunk.chunkingStrategy,
+            extractionMethod: chunk.extractionMethod,
         } as RecordMetadata,
     }));
 
@@ -137,6 +138,8 @@ export interface DocumentInfo {
     docId: string;
     title: string;
     chunkCount: number;
+    chunkingStrategy?: string;
+    extractionMethod?: string;
 }
 
 export async function listDocuments(): Promise<DocumentInfo[]> {
@@ -170,7 +173,7 @@ export async function listDocuments(): Promise<DocumentInfo[]> {
     }
 
     // Group by document ID and extract metadata from fetched records
-    const docMap = new Map<string, { title: string; count: number }>();
+    const docMap = new Map<string, { title: string; count: number; chunkingStrategy?: string; extractionMethod?: string }>();
 
     for (const id of allIds) {
         const [docId] = id.split('#');
@@ -178,7 +181,9 @@ export async function listDocuments(): Promise<DocumentInfo[]> {
             // Get metadata from already-fetched records (no additional API calls!)
             const record = allRecords[id];
             const title = (record?.metadata?.title as string) || docId;
-            docMap.set(docId, { title, count: 1 });
+            const chunkingStrategy = record?.metadata?.chunkingStrategy as string | undefined;
+            const extractionMethod = record?.metadata?.extractionMethod as string | undefined;
+            docMap.set(docId, { title, count: 1, chunkingStrategy, extractionMethod });
         } else {
             const doc = docMap.get(docId)!;
             doc.count++;
@@ -189,6 +194,8 @@ export async function listDocuments(): Promise<DocumentInfo[]> {
         docId,
         title: info.title,
         chunkCount: info.count,
+        chunkingStrategy: info.chunkingStrategy,
+        extractionMethod: info.extractionMethod,
     }));
 }
 

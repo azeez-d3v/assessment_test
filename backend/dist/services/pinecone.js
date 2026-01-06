@@ -59,6 +59,7 @@ async function upsertChunks(chunks, embeddings) {
             chunkText: chunk.text,
             chunkIndex: chunk.index,
             chunkingStrategy: chunk.chunkingStrategy,
+            extractionMethod: chunk.extractionMethod,
         },
     }));
     // Upsert in batches of 100 (Pinecone limit)
@@ -144,7 +145,9 @@ async function listDocuments() {
             // Get metadata from already-fetched records (no additional API calls!)
             const record = allRecords[id];
             const title = record?.metadata?.title || docId;
-            docMap.set(docId, { title, count: 1 });
+            const chunkingStrategy = record?.metadata?.chunkingStrategy;
+            const extractionMethod = record?.metadata?.extractionMethod;
+            docMap.set(docId, { title, count: 1, chunkingStrategy, extractionMethod });
         }
         else {
             const doc = docMap.get(docId);
@@ -155,6 +158,8 @@ async function listDocuments() {
         docId,
         title: info.title,
         chunkCount: info.count,
+        chunkingStrategy: info.chunkingStrategy,
+        extractionMethod: info.extractionMethod,
     }));
 }
 /**

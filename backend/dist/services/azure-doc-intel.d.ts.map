@@ -1,1 +1,1 @@
-{"version":3,"file":"azure-doc-intel.d.ts","sourceRoot":"","sources":["../../src/services/azure-doc-intel.ts"],"names":[],"mappings":"AAAA;;;GAGG;AAUH;;GAEG;AACH,wBAAgB,iBAAiB,IAAI,OAAO,CAE3C;AAED;;;GAGG;AACH,wBAAsB,wBAAwB,CAAC,MAAM,EAAE,MAAM,GAAG,OAAO,CAAC,MAAM,CAAC,CAsC9E"}
+{"version":3,"file":"azure-doc-intel.d.ts","sourceRoot":"","sources":["../../src/services/azure-doc-intel.ts"],"names":[],"mappings":"AAAA;;;GAGG;AAiBH;;GAEG;AACH,wBAAgB,iBAAiB,IAAI,OAAO,CAG3C;AAED;;;GAGG;AACH,wBAAsB,wBAAwB,CAAC,MAAM,EAAE,MAAM,GAAG,OAAO,CAAC,MAAM,CAAC,CAyC9E"}

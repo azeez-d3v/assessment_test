@@ -17,6 +17,7 @@ export interface Chunk {
     docId: string;
     title: string;
     chunkingStrategy?: string;
+    extractionMethod?: string;
 }
 
 // Ingest endpoint
@@ -59,6 +60,7 @@ export interface VectorMetadata {
     chunkText: string;
     chunkIndex: number;
     chunkingStrategy?: string;
+    extractionMethod?: string;
 }
 
 // Retrieved chunk from Pinecone query

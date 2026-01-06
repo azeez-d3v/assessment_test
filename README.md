@@ -24,10 +24,10 @@ assessment_test/
 │   │   ├── __tests__/ # Manual test scripts (chat history, openai sdk, etc)
 │   │   ├── config/    # Shared configuration (chunking constants)
 │   │   ├── handlers/  # Lambda handlers (ingest, ask, upload-url)
-│   │   ├── services/  # Business logic (chunking, embeddings, llm, pinecone, openai)
+│   │   ├── services/  # Business logic (chunking, embeddings, llm, pinecone, azure-doc-intel)
 │   │   ├── types/     # TypeScript interfaces
 │   │   └── utils/     # Validation schemas, response helpers
-│   ├── tests/         # Unit tests (12 chunking + 3 prompt)
+│   ├── tests/         # Unit tests (18 tests)
 │   └── template.yaml  # SAM infrastructure (with rate limiting)
 └── README.md
 ```
@@ -37,9 +37,14 @@ assessment_test/
 ### Backend (`backend/.env`)
 
 ```env
+# Required
 OPENROUTER_API_KEY=your_openrouter_api_key
 PINECONE_API_KEY=your_pinecone_api_key
 PINECONE_INDEX=your_pinecone_index_name
+
+# Optional - Azure Document Intelligence (enhanced PDF processing)
+AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT=https://your-resource.cognitiveservices.azure.com/
+AZURE_DOCUMENT_INTELLIGENCE_KEY=your_azure_key
 ```
 
 ### Frontend (`frontend/.env.local`)
@@ -221,8 +226,12 @@ sam deploy --guided
 sam deploy --parameter-overrides \
   OpenRouterApiKey=YOUR_KEY \
   PineconeApiKey=YOUR_KEY \
-  PineconeIndex=YOUR_INDEX
+  PineconeIndex=YOUR_INDEX \
+  AzureDocumentIntelligenceEndpoint=YOUR_AZURE_ENDPOINT \
+  AzureDocumentIntelligenceKey=YOUR_AZURE_KEY
 ```
+
+> **Note**: Azure parameters are optional. Omit them to use Textract/pdf-parse for PDF processing.
 
 ### Frontend Deployment
 
@@ -318,11 +327,13 @@ PUT file to S3 → S3 Event → SQS → IngestWorkerFunction
 ```
 
 **Text Extraction by File Type:**
-| Extension | Method |
-|-----------|--------|
-| `.txt`, `.md` | Plain text read |
-| `.pdf` | AWS Textract (with `pdf-parse-new` fallback) |
-| `.docx` | Mammoth library |
+| Extension | Primary Method | Fallback |
+|-----------|----------------|----------|
+| `.txt`, `.md` | Plain text read | - |
+| `.pdf` | Azure Document Intelligence (Markdown) | AWS Textract → pdf-parse |
+| `.docx` | Mammoth library | - |
+
+> **Note**: Azure Document Intelligence is optional. If not configured, PDFs are processed with Textract/pdf-parse.
 
 **Why Hybrid?**
 - **API path**: Best for programmatic ingestion, user controls metadata

@@ -2,6 +2,27 @@
 
 All notable changes to the Doc Q&A Portal will be documented in this file.
 
+## [1.6.0] - 2026-01-06
+
+### Added
+
+#### Azure Document Intelligence Integration
+- **Enhanced PDF Processing**: Added Azure AI Document Intelligence (Layout model) for superior PDF text extraction
+- **Markdown Output**: Azure returns structured Markdown with preserved headers, tables, and formatting
+- **3-Tier Fallback**: PDF extraction now tries Azure → AWS Textract → pdf-parse (in order)
+- **Optional Configuration**: Works without Azure credentials (falls back to Textract/pdf-parse)
+- **Manual Test**: Added `azure-doc-intel.test.ts` for verifying Azure integration
+
+### Changed
+- **Worker Timeout**: Increased `IngestWorkerFunction` timeout from 120s to 300s to accommodate Azure processing
+
+### Technical
+- **New Service**: `src/services/azure-doc-intel.ts` with `isAzureConfigured()` and `analyzeDocumentWithAzure()`
+- **Dependencies**: Added `@azure-rest/ai-document-intelligence` and `@azure/core-auth`
+- **Infrastructure**: New SAM parameters for `AzureDocumentIntelligenceEndpoint` and `AzureDocumentIntelligenceKey`
+
+---
+
 ## [1.5.3] - 2026-01-05
 
 ### Added

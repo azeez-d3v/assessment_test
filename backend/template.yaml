@@ -16,6 +16,15 @@ Parameters:
     Type: String
     Description: Pinecone Index Name
     Default: doc-qa-index
+  AzureDocumentIntelligenceEndpoint:
+    Type: String
+    Description: Azure Document Intelligence Endpoint URL
+    Default: ''
+  AzureDocumentIntelligenceKey:
+    Type: String
+    Description: Azure Document Intelligence API Key
+    NoEcho: true
+    Default: ''
 
 Globals:
   Function:
@@ -286,12 +295,14 @@ Resources:
       FunctionName: doc-qa-ingest-worker
       CodeUri: ./
       Handler: dist/handlers/ingest-worker.handler
-      Timeout: 120  # 2 minutes for processing
+      Timeout: 300  # 5 minutes for Azure Document Intelligence processing
       MemorySize: 1024
       Description: Processes async ingest jobs from SQS
       Environment:
         Variables:
           DOC_BUCKET: !Ref DocQaBucket
+          AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT: !Ref AzureDocumentIntelligenceEndpoint
+          AZURE_DOCUMENT_INTELLIGENCE_KEY: !Ref AzureDocumentIntelligenceKey
       Policies:
         - S3ReadPolicy:
             BucketName: !Ref DocQaBucket

@@ -1,0 +1,1 @@
+{"version":3,"file":"chunking.js","sourceRoot":"","sources":["../../src/config/chunking.ts"],"names":[],"mappings":";AAAA;;;GAGG;;;AAEH,iCAAiC;AACjC,gFAAgF;AACnE,QAAA,UAAU,GAAG,IAAI,CAAC;AAC/B,wDAAwD;AAC3C,QAAA,mBAAmB,GAAG,EAAE,CAAC;AAEtC,sBAAsB;AACtB,qCAAqC;AACxB,QAAA,gBAAgB,GAAG,GAAG,CAAC;AACpC,yCAAyC;AAC5B,QAAA,mBAAmB,GAAG,EAAE,CAAC;AAIzB,QAAA,yBAAyB,GAAqB,WAAW,CAAC"}
